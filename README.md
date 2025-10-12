@@ -25,7 +25,7 @@ npm install
 
 Create/Update `.env` file with your MongoDB URI:
 ```env
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/campuscommerce
+MONGODB_URI=MONGODB_URI_GOES_HERE
 PORT=5000
 ```
 
