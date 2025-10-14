@@ -677,6 +677,11 @@ const StudentMarketplace = () => {
       return;
     }
 
+    if (authForm.phone.length >10) {
+      alert('⚠️ Phone number should not exceed 10 digits!');
+      return;
+    }
+
     try {
       setLoading(true);
       

@@ -23,7 +23,7 @@ cd backend
 npm install
 ```
 
-Create/Update `.env` file with your MongoDB URI:
+Create/Update `.env` file with your MongoDB URI and also create an empty uploads folder:
 ```env
 MONGODB_URI=MONGODB_URI_GOES_HERE
 PORT=5000
