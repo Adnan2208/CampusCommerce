@@ -86,7 +86,7 @@ export const createProduct = async (req, res) => {
       });
     }
 
-    const product = await Product.create({
+    const productData = {
       title,
       category,
       price,
@@ -99,7 +99,14 @@ export const createProduct = async (req, res) => {
       userId: req.user.userId,
       sellerEmail: req.user.email,
       rating: 0
-    });
+    };
+
+    // Add coordinates if provided
+    if (req.body.coordinates) {
+      productData.coordinates = req.body.coordinates;
+    }
+
+    const product = await Product.create(productData);
 
     res.status(201).json({ success: true, data: product });
   } catch (error) {

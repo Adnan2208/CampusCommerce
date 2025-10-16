@@ -59,7 +59,7 @@ export const createOrder = async (req, res) => {
     }
 
     // Create order
-    const order = await Order.create({
+    const orderData = {
       productId: product._id,
       productTitle: product.title,
       productPrice: product.price,
@@ -75,7 +75,21 @@ export const createOrder = async (req, res) => {
       message: message || '',
       pickupLocation: product.location,
       status: 'pending'
-    });
+    };
+
+    // Add pickup coordinates if available from product
+    if (product.coordinates && product.coordinates.lat && product.coordinates.lng) {
+      orderData.pickupCoordinates = product.coordinates;
+    }
+
+    // Initialize payment object
+    orderData.payment = {
+      status: 'pending',
+      amount: product.price,
+      paymentMethod: 'upi'
+    };
+
+    const order = await Order.create(orderData);
 
     res.status(201).json({
       success: true,
@@ -185,12 +199,21 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     order.status = status;
-    await order.save();
 
-    // If order is completed, mark product as sold
+    // If order is completed, initialize payment object if it doesn't exist
     if (status === 'completed') {
+      if (!order.payment || !order.payment.status) {
+        order.payment = {
+          status: 'pending',
+          amount: order.productPrice,
+          paymentMethod: 'upi'
+        };
+      }
+      // Mark product as sold
       await Product.findByIdAndUpdate(order.productId, { isSold: true });
     }
+
+    await order.save();
 
     res.status(200).json({
       success: true,
@@ -253,6 +276,193 @@ export const cancelOrder = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to cancel order'
+    });
+  }
+};
+
+// Enable live tracking when order is accepted
+export const enableLiveTracking = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { pickupCoordinates } = req.body;
+
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Only seller can enable tracking when accepting order
+    if (order.sellerId.toString() !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only seller can enable tracking'
+      });
+    }
+
+    // Enable tracking only for accepted orders
+    if (order.status !== 'accepted') {
+      return res.status(400).json({
+        success: false,
+        message: 'Live tracking can only be enabled for accepted orders'
+      });
+    }
+
+    // Update order with predefined pickup coordinates and enable tracking
+    order.pickupCoordinates = pickupCoordinates || order.pickupCoordinates;
+    order.liveTracking.enabled = true;
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Live tracking enabled',
+      data: order
+    });
+  } catch (error) {
+    console.error('Enable live tracking error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to enable live tracking'
+    });
+  }
+};
+
+// Update user's live location
+export const updateLiveLocation = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { lat, lng } = req.body;
+
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    if (!lat || !lng) {
+      return res.status(400).json({
+        success: false,
+        message: 'Latitude and longitude are required'
+      });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Check if user is buyer or seller
+    const isBuyer = order.buyerId.toString() === req.user.userId;
+    const isSeller = order.sellerId.toString() === req.user.userId;
+
+    if (!isBuyer && !isSeller) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not part of this order'
+      });
+    }
+
+    // Only update location for accepted orders with tracking enabled
+    if (order.status !== 'accepted' || !order.liveTracking.enabled) {
+      return res.status(400).json({
+        success: false,
+        message: 'Live tracking is not active for this order'
+      });
+    }
+
+    // Update appropriate location
+    if (isBuyer) {
+      order.liveTracking.buyerLocation = {
+        lat,
+        lng,
+        lastUpdated: new Date()
+      };
+    } else {
+      order.liveTracking.sellerLocation = {
+        lat,
+        lng,
+        lastUpdated: new Date()
+      };
+    }
+
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Location updated successfully',
+      data: {
+        buyerLocation: order.liveTracking.buyerLocation,
+        sellerLocation: order.liveTracking.sellerLocation
+      }
+    });
+  } catch (error) {
+    console.error('Update live location error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update location'
+    });
+  }
+};
+
+// Get live tracking data for an order
+export const getLiveTracking = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Check if user is buyer or seller
+    const isBuyer = order.buyerId.toString() === req.user.userId;
+    const isSeller = order.sellerId.toString() === req.user.userId;
+
+    if (!isBuyer && !isSeller) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not part of this order'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        trackingEnabled: order.liveTracking.enabled,
+        pickupCoordinates: order.pickupCoordinates,
+        buyerLocation: order.liveTracking.buyerLocation,
+        sellerLocation: order.liveTracking.sellerLocation,
+        orderStatus: order.status
+      }
+    });
+  } catch (error) {
+    console.error('Get live tracking error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch tracking data'
     });
   }
 };

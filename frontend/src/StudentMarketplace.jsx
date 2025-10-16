@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Search, User, Heart, Star, MapPin, MessageCircle, Plus, Home, Package, Edit2, Trash2, Store, X, ShoppingBag, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Search, User, Heart, Star, MapPin, MessageCircle, Plus, Home, Package, Edit2, Trash2, Store, X, ShoppingBag, Clock, CheckCircle, XCircle, CreditCard } from 'lucide-react';
 import { productAPI, orderAPI } from './services/api';
+import LocationTracker from './Components/LocationTracker';
+import PaymentModal from './components/PaymentModal';
 
 const StudentMarketplace = () => {
   // Authentication state
@@ -24,12 +26,22 @@ const StudentMarketplace = () => {
   const [receivedOrders, setReceivedOrders] = useState([]);
   const [orderMessage, setOrderMessage] = useState('');
   
+  // Location tracking state
+  const [showLocationTracker, setShowLocationTracker] = useState(false);
+  const [selectedOrderForTracking, setSelectedOrderForTracking] = useState(null);
+  const [productCoordinates, setProductCoordinates] = useState(null);
+  
+  // Payment state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState(null);
+  
   // User profile state
   const [userProfile, setUserProfile] = useState({
     name: '',
     email: '',
     phone: '',
     location: '',
+    upiId: '',
     initials: ''
   });
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -58,6 +70,8 @@ const StudentMarketplace = () => {
     condition: 'Like New',
     description: '',
     location: '',
+    lat: '',
+    lng: '',
     image: '📦'
   });
   const [imagePreview, setImagePreview] = useState(null);
@@ -161,9 +175,27 @@ const StudentMarketplace = () => {
     }
   }, [isAuthenticated, activePage]);
 
-  const fetchProducts = async () => {
+  // Auto-refresh products when on home page
+  useEffect(() => {
+    if (isAuthenticated && activePage === 'home') {
+      // Refresh products immediately when navigating to home
+      fetchProducts(true);
+      
+      // Set up polling every 15 seconds to check for new products (no loading spinner for background refresh)
+      const intervalId = setInterval(() => {
+        fetchProducts(false);
+      }, 15000); // 15 seconds
+
+      // Cleanup interval on unmount or when leaving home page
+      return () => clearInterval(intervalId);
+    }
+  }, [isAuthenticated, activePage]);
+
+  const fetchProducts = async (showLoadingSpinner = true) => {
     try {
-      setLoading(true);
+      if (showLoadingSpinner) {
+        setLoading(true);
+      }
       setError(null);
       const response = await productAPI.getAll();
       if (response.success) {
@@ -171,11 +203,15 @@ const StudentMarketplace = () => {
       }
     } catch (err) {
       console.error('Failed to fetch products:', err);
-      setError('Failed to load products. Using sample data.');
-      // Fallback to initial products if API fails
-      setProducts(initialProducts);
+      if (showLoadingSpinner) {
+        setError('Failed to load products. Using sample data.');
+        // Fallback to initial products if API fails
+        setProducts(initialProducts);
+      }
     } finally {
-      setLoading(false);
+      if (showLoadingSpinner) {
+        setLoading(false);
+      }
     }
   };
 
@@ -235,6 +271,25 @@ const StudentMarketplace = () => {
     try {
       const response = await orderAPI.updateStatus(orderId, status);
       if (response.success) {
+        // Enable live tracking when order is accepted
+        if (status === 'accepted') {
+          const order = receivedOrders.find(o => o._id === orderId);
+          if (order && order.pickupCoordinates) {
+            try {
+              await fetch(`http://localhost:5000/api/orders/${orderId}/enable-tracking`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${authToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ pickupCoordinates: order.pickupCoordinates })
+              });
+            } catch (trackError) {
+              console.error('Failed to enable tracking:', trackError);
+            }
+          }
+        }
+        
         alert(`✅ Order ${status} successfully!`);
         fetchOrders(); // Refresh orders
         if (status === 'completed') {
@@ -425,6 +480,14 @@ const StudentMarketplace = () => {
         description: newProduct.description
       };
 
+      // Add coordinates if provided
+      if (newProduct.lat && newProduct.lng) {
+        productData.coordinates = {
+          lat: parseFloat(newProduct.lat),
+          lng: parseFloat(newProduct.lng)
+        };
+      }
+
       // Send to API
       console.log('Sending product data to API...', productData);
       const response = await productAPI.create(productData);
@@ -449,6 +512,8 @@ const StudentMarketplace = () => {
           condition: 'Like New',
           description: '',
           location: '',
+          lat: '',
+          lng: '',
           image: '📦'
         });
         setImagePreview(null);
@@ -515,6 +580,8 @@ const StudentMarketplace = () => {
       condition: product.condition,
       description: product.description || '',
       location: product.location,
+      lat: product.coordinates?.lat?.toString() || '',
+      lng: product.coordinates?.lng?.toString() || '',
       image: product.image
     });
     // Set preview for uploaded images or base64
@@ -548,6 +615,14 @@ const StudentMarketplace = () => {
         description: newProduct.description
       };
 
+      // Add coordinates if provided
+      if (newProduct.lat && newProduct.lng) {
+        productData.coordinates = {
+          lat: parseFloat(newProduct.lat),
+          lng: parseFloat(newProduct.lng)
+        };
+      }
+
       const response = await productAPI.update(editingProduct._id || editingProduct.id, productData);
 
       if (response.success) {
@@ -572,6 +647,8 @@ const StudentMarketplace = () => {
           condition: 'Like New',
           description: '',
           location: '',
+          lat: '',
+          lng: '',
           image: '📦'
         });
         setImagePreview(null);
@@ -590,12 +667,44 @@ const StudentMarketplace = () => {
   }, [editingProduct, newProduct, imagePreview]);
 
   // Save profile changes
-  const handleSaveProfile = useCallback(() => {
-    // In a real app, this would call an API
-    // For now, just update local state
-    localStorage.setItem('userProfile', JSON.stringify(userProfile));
-    setIsEditingProfile(false);
-    alert('✅ Profile updated successfully!');
+  const handleSaveProfile = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Validate UPI ID format if provided
+      if (userProfile.upiId && userProfile.upiId.trim()) {
+        const upiRegex = /^[\w.-]+@[\w.-]+$/;
+        if (!upiRegex.test(userProfile.upiId)) {
+          setError('Invalid UPI ID format. Example: yourname@paytm');
+          setLoading(false);
+          return;
+        }
+      }
+
+      const { userAPI } = await import('./services/api');
+      const data = await userAPI.updateProfile({
+        name: userProfile.name,
+        phone: userProfile.phone,
+        location: userProfile.location,
+        upiId: userProfile.upiId
+      });
+
+      if (data.success) {
+        // Update local state with response data
+        setUserProfile(data.user);
+        localStorage.setItem('userProfile', JSON.stringify(data.user));
+        setIsEditingProfile(false);
+        alert('✅ Profile updated successfully!');
+      } else {
+        setError(data.message || 'Failed to update profile');
+      }
+    } catch (err) {
+      console.error('Save profile error:', err);
+      setError(err.response?.data?.message || 'Failed to update profile');
+    } finally {
+      setLoading(false);
+    }
   }, [userProfile]);
 
   // Auth handlers
@@ -609,12 +718,6 @@ const StudentMarketplace = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    
-    // Validate email domain
-    if (!authForm.email.endsWith('@kjei.edu.in')) {
-      alert('⚠️ Only @kjei.edu.in email addresses are allowed!');
-      return;
-    }
 
     try {
       setLoading(true);
@@ -658,12 +761,6 @@ const StudentMarketplace = () => {
 
   const handleSignup = async (e) => {
     e.preventDefault();
-    
-    // Validate email domain
-    if (!authForm.email.endsWith('@kjei.edu.in')) {
-      alert('⚠️ Only @kjei.edu.in email addresses are allowed!');
-      return;
-    }
 
     // Validate passwords match
     if (authForm.password !== authForm.confirmPassword) {
@@ -765,7 +862,7 @@ const StudentMarketplace = () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('userProfile');
     setAuthToken(null);
-    setUserProfile({ name: '', email: '', phone: '', location: '', initials: '' });
+    setUserProfile({ name: '', email: '', phone: '', location: '', upiId: '', initials: '' });
     setIsAuthenticated(false);
     setActivePage('login');
     setProducts([]);
@@ -806,11 +903,10 @@ const StudentMarketplace = () => {
                 name="email"
                 value={authForm.email}
                 onChange={handleAuthInputChange}
-                placeholder="your.name@kjei.edu.in"
+                placeholder="your.email@example.com"
                 className="w-full px-5 py-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-800"
                 required
               />
-              <p className="text-xs text-gray-500 mt-2">* Only @kjei.edu.in emails allowed</p>
             </div>
 
             <div>
@@ -948,16 +1044,12 @@ const StudentMarketplace = () => {
                   name="email"
                   value={authForm.email}
                   onChange={handleAuthInputChange}
-                  placeholder="your.name@kjei.edu.in"
+                  placeholder="your.email@example.com"
                   className="w-full px-5 py-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-800"
                   required
                 />
               </div>
             </div>
-
-            <p className="text-xs text-gray-500 -mt-3">
-              * Only @kjei.edu.in email addresses are allowed
-            </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -1293,6 +1385,8 @@ const StudentMarketplace = () => {
                   condition: 'Like New',
                   description: '',
                   location: '',
+                  lat: '',
+                  lng: '',
                   image: '📦'
                 });
                 setImagePreview(null);
@@ -1447,6 +1541,36 @@ const StudentMarketplace = () => {
                 required
               />
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">Latitude (Optional)</label>
+                <input
+                  type="number"
+                  step="any"
+                  name="lat"
+                  value={newProduct.lat || ''}
+                  onChange={handleSellInputChange}
+                  placeholder="e.g., 19.0760"
+                  className="w-full px-5 py-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-800"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">Longitude (Optional)</label>
+                <input
+                  type="number"
+                  step="any"
+                  name="lng"
+                  value={newProduct.lng || ''}
+                  onChange={handleSellInputChange}
+                  placeholder="e.g., 72.8777"
+                  className="w-full px-5 py-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-800"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 -mt-3">
+              💡 Add coordinates for precise location tracking on maps. You can get these from Google Maps.
+            </p>
           </div>
 
           {/* Submit Button */}
@@ -1490,10 +1614,21 @@ const StudentMarketplace = () => {
               <div>
                 <h2 className="text-3xl font-bold text-white mb-1">{userProfile.name}</h2>
                 <p className="text-blue-100 mb-1">{userProfile.email}</p>
-                <div className="flex items-center gap-2 text-blue-100 text-sm">
+                <div className="flex items-center gap-2 text-blue-100 text-sm mb-2">
                   <MapPin size={14} />
                   <span>{userProfile.location}</span>
                 </div>
+                {userProfile.upiId ? (
+                  <div className="inline-flex items-center gap-2 bg-green-500/20 text-green-200 px-3 py-1 rounded-full text-xs font-semibold border border-green-400/30">
+                    <span>✅</span>
+                    <span>Payments Configured</span>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-2 bg-orange-500/20 text-orange-200 px-3 py-1 rounded-full text-xs font-semibold border border-orange-400/30">
+                    <span>⚠️</span>
+                    <span>Configure UPI to receive payments</span>
+                  </div>
+                )}
               </div>
             </div>
             <button
@@ -1575,6 +1710,43 @@ const StudentMarketplace = () => {
               />
             </div>
           </div>
+          
+          {/* Payment Settings */}
+          <div className="mt-6 p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border-2 border-green-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center">
+                <span className="text-xl">💳</span>
+              </div>
+              <div>
+                <h4 className="font-bold text-gray-800">Payment Configuration</h4>
+                <p className="text-sm text-gray-600">Configure your UPI ID to receive payments</p>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-3">
+                UPI ID *
+                <span className="ml-2 text-xs font-normal text-gray-500">(Required to receive payments)</span>
+              </label>
+              <input
+                type="text"
+                name="upiId"
+                value={userProfile.upiId || ''}
+                onChange={handleProfileInputChange}
+                placeholder="yourname@paytm or yourname@phonepe"
+                className="w-full px-5 py-4 border-2 border-green-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all text-gray-800 bg-white"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                💡 Enter your UPI ID (e.g., yourname@paytm, yourname@phonepe, yourname@googlepay)
+              </p>
+              {!userProfile.upiId && (
+                <div className="mt-3 flex items-start gap-2 text-sm text-orange-700 bg-orange-50 p-3 rounded-lg border border-orange-200">
+                  <span className="text-lg">⚠️</span>
+                  <span>You won't be able to receive payments until you configure your UPI ID</span>
+                </div>
+              )}
+            </div>
+          </div>
+          
           <button
             onClick={handleSaveProfile}
             className="w-full mt-6 bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 text-white font-bold py-4 rounded-xl hover:shadow-2xl hover:shadow-blue-500/50 transition-all hover:scale-[1.02]"
@@ -1731,12 +1903,24 @@ const StudentMarketplace = () => {
                 )}
                 
                 {order.status === 'accepted' && (
-                  <button
-                    onClick={() => handleUpdateOrderStatus(order._id, 'completed')}
-                    className="w-full mt-4 pt-4 border-t border-gray-200 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg transition-all"
-                  >
-                    ✓ Mark as Completed
-                  </button>
+                  <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
+                    <button
+                      onClick={() => {
+                        setSelectedOrderForTracking(order);
+                        setShowLocationTracker(true);
+                      }}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      <MapPin size={18} />
+                      📍 View Live Tracking
+                    </button>
+                    <button
+                      onClick={() => handleUpdateOrderStatus(order._id, 'completed')}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg transition-all"
+                    >
+                      ✓ Mark as Completed
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
@@ -1801,6 +1985,48 @@ const StudentMarketplace = () => {
                     Cancel Order
                   </button>
                 )}
+                
+                {order.status === 'accepted' && (
+                  <button
+                    onClick={() => {
+                      setSelectedOrderForTracking(order);
+                      setShowLocationTracker(true);
+                    }}
+                    className="w-full mt-4 pt-4 border-t border-gray-200 bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-2"
+                  >
+                    <MapPin size={18} />
+                    📍 View Live Tracking
+                  </button>
+                )}
+                
+                {order.status === 'completed' && order.payment?.status === 'pending' && (
+                  <button
+                    onClick={() => {
+                      setSelectedOrderForPayment(order);
+                      setShowPaymentModal(true);
+                    }}
+                    className="w-full mt-4 pt-4 border-t border-gray-200 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2"
+                  >
+                    <CreditCard size={18} />
+                    💳 Pay Now - ₹{order.productPrice}
+                  </button>
+                )}
+                
+                {order.status === 'completed' && order.payment?.status === 'completed' && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-center gap-2 text-green-600 font-semibold">
+                      <CheckCircle size={20} />
+                      <span>Payment Completed</span>
+                    </div>
+                    <div className="mt-2 text-center text-sm text-gray-600">
+                      {order.payment.paymentMethod === 'cash' ? (
+                        <span>Paid via Cash</span>
+                      ) : (
+                        <span>Transaction ID: {order.payment.transactionId}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1812,12 +2038,16 @@ const StudentMarketplace = () => {
         <h3 className="text-2xl font-bold text-gray-800 mb-6">Quick Settings</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[
-            { name: 'Notifications', desc: 'Manage notification preferences', icon: '🔔', color: 'from-blue-500 to-cyan-500' },
-            { name: 'Privacy', desc: 'Control privacy settings', icon: '🔒', color: 'from-purple-500 to-pink-500' },
-            { name: 'Payment Methods', desc: 'Manage payment methods', icon: '💳', color: 'from-green-500 to-emerald-500' },
-            { name: 'Help & Support', desc: 'Get help or contact us', icon: '💬', color: 'from-orange-500 to-red-500' }
+            { name: 'Notifications', desc: 'Manage notification preferences', icon: '🔔', color: 'from-blue-500 to-cyan-500', onClick: () => {} },
+            { name: 'Privacy', desc: 'Control privacy settings', icon: '🔒', color: 'from-purple-500 to-pink-500', onClick: () => {} },
+            { name: 'Payment Methods', desc: 'Configure UPI ID for payments', icon: '💳', color: 'from-green-500 to-emerald-500', onClick: () => setIsEditingProfile(true) },
+            { name: 'Help & Support', desc: 'Get help or contact us', icon: '💬', color: 'from-orange-500 to-red-500', onClick: () => {} }
           ].map(item => (
-            <button key={item.name} className="group relative overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 hover:from-white hover:to-white p-6 rounded-2xl transition-all hover:shadow-xl text-left border-2 border-gray-200 hover:border-transparent">
+            <button 
+              key={item.name}
+              onClick={item.onClick}
+              className="group relative overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 hover:from-white hover:to-white p-6 rounded-2xl transition-all hover:shadow-xl text-left border-2 border-gray-200 hover:border-transparent"
+            >
               <div className={`absolute inset-0 bg-gradient-to-br ${item.color} opacity-0 group-hover:opacity-10 transition-opacity`}></div>
               <div className="relative flex items-start gap-4">
                 <div className={`w-12 h-12 bg-gradient-to-br ${item.color} rounded-xl flex items-center justify-center text-2xl shadow-lg`}>
@@ -1976,6 +2206,38 @@ const StudentMarketplace = () => {
                   </div>
                 )}
 
+                {/* Pickup Location Map Preview */}
+                {selectedProduct.coordinates?.lat && selectedProduct.coordinates?.lng && (
+                  <div className="mb-6">
+                    <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                      <MapPin size={18} className="text-blue-600" />
+                      Pickup Location on Map
+                    </h3>
+                    {import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.VITE_GOOGLE_MAPS_API_KEY !== 'YOUR_API_KEY_HERE' ? (
+                      <div className="rounded-xl overflow-hidden border-2 border-gray-200">
+                        <iframe
+                          width="100%"
+                          height="250"
+                          frameBorder="0"
+                          style={{ border: 0 }}
+                          src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${selectedProduct.coordinates.lat},${selectedProduct.coordinates.lng}&zoom=15`}
+                          allowFullScreen
+                          title="Pickup Location Map"
+                        ></iframe>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-100 border-2 border-gray-200 rounded-xl p-8 text-center">
+                        <MapPin size={48} className="mx-auto text-gray-400 mb-2" />
+                        <p className="text-gray-600 font-medium mb-1">Map Preview Unavailable</p>
+                        <p className="text-sm text-gray-500">Add Google Maps API key to view location</p>
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-2">
+                      📍 Coordinates: {selectedProduct.coordinates.lat}, {selectedProduct.coordinates.lng}
+                    </p>
+                  </div>
+                )}
+
                 {/* Order Message */}
                 {selectedProduct.sellerEmail !== userProfile.email && (
                   <div className="mb-6">
@@ -2027,6 +2289,73 @@ const StudentMarketplace = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Location Tracker Modal */}
+      {showLocationTracker && selectedOrderForTracking && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowLocationTracker(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="relative p-8">
+              {/* Close Button */}
+              <button
+                onClick={() => {
+                  setShowLocationTracker(false);
+                  setSelectedOrderForTracking(null);
+                }}
+                className="absolute top-4 right-4 z-10 w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110"
+              >
+                <X size={20} />
+              </button>
+
+              {/* Order Info Header */}
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                  {selectedOrderForTracking.productTitle}
+                </h2>
+                <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    selectedOrderForTracking.status === 'accepted' ? 'bg-blue-100 text-blue-700' :
+                    selectedOrderForTracking.status === 'completed' ? 'bg-green-100 text-green-700' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    {selectedOrderForTracking.status.toUpperCase()}
+                  </span>
+                  <span>Order ID: {selectedOrderForTracking._id}</span>
+                </div>
+              </div>
+
+              {/* Location Tracker Component */}
+              <LocationTracker
+                orderId={selectedOrderForTracking._id}
+                authToken={authToken}
+                userRole={selectedOrderForTracking.buyerId === userProfile.email ? 'buyer' : 'seller'}
+                orderStatus={selectedOrderForTracking.status}
+                pickupCoordinates={selectedOrderForTracking.pickupCoordinates}
+                onClose={() => {
+                  setShowLocationTracker(false);
+                  setSelectedOrderForTracking(null);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && selectedOrderForPayment && (
+        <PaymentModal
+          order={selectedOrderForPayment}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setSelectedOrderForPayment(null);
+          }}
+          onPaymentComplete={(updatedOrder) => {
+            // Refresh orders to show updated payment status
+            fetchOrders();
+            setShowPaymentModal(false);
+            setSelectedOrderForPayment(null);
+          }}
+        />
       )}
     </div>
   );

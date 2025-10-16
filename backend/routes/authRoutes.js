@@ -13,14 +13,6 @@ router.post('/signup', async (req, res) => {
   try {
     const { name, email, password, phone, location } = req.body;
 
-    // Validate email domain
-    if (!email.endsWith('@kjei.edu.in')) {
-      return res.status(400).json({
-        success: false,
-        message: 'Only @kjei.edu.in email addresses are allowed!'
-      });
-    }
-
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -113,14 +105,6 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Validate email domain
-    if (!email.endsWith('@kjei.edu.in')) {
-      return res.status(400).json({
-        success: false,
-        message: 'Only @kjei.edu.in email addresses are allowed!'
-      });
-    }
-
     // Find user and explicitly select password field
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
@@ -156,6 +140,7 @@ router.post('/login', async (req, res) => {
         email: user.email,
         phone: user.phone,
         location: user.location,
+        upiId: user.upiId,
         initials: user.initials
       }
     });
@@ -210,6 +195,7 @@ router.get('/me', authenticateToken, async (req, res) => {
         email: user.email,
         phone: user.phone,
         location: user.location,
+        upiId: user.upiId,
         initials: user.initials
       }
     });
@@ -218,6 +204,48 @@ router.get('/me', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get user data'
+    });
+  }
+});
+
+// Update user profile
+router.put('/profile', authenticateToken, async (req, res) => {
+  try {
+    const { name, phone, location, upiId } = req.body;
+    
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Update fields if provided
+    if (name) user.name = name;
+    if (phone !== undefined) user.phone = phone;
+    if (location !== undefined) user.location = location;
+    if (upiId !== undefined) user.upiId = upiId;
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: {
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        location: user.location,
+        upiId: user.upiId,
+        initials: user.initials
+      }
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update profile'
     });
   }
 });

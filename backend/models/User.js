@@ -19,13 +19,9 @@ const userSchema = new mongoose.Schema({
       validator: function(email) {
         // Email format validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-          return false;
-        }
-        // Check if email ends with @kjei.edu.in
-        return email.endsWith('@kjei.edu.in');
+        return emailRegex.test(email);
       },
-      message: 'Please provide a valid @kjei.edu.in email address'
+      message: 'Please provide a valid email address'
     }
   },
   password: {
@@ -50,6 +46,19 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please provide your location'],
     trim: true
+  },
+  upiId: {
+    type: String,
+    default: null,
+    trim: true,
+    validate: {
+      validator: function(upiId) {
+        if (!upiId) return true; // Allow null/empty
+        // UPI ID format: user@bank or phonenumber@bank
+        return /^[\w.-]+@[\w.-]+$/.test(upiId);
+      },
+      message: 'Please provide a valid UPI ID (e.g., username@paytm or 9876543210@ybl)'
+    }
   },
   initials: {
     type: String,

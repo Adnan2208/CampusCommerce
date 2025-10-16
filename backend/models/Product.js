@@ -37,6 +37,16 @@ const productSchema = new mongoose.Schema({
     required: [true, 'Pickup location is required'],
     trim: true
   },
+  coordinates: {
+    lat: {
+      type: Number,
+      default: null
+    },
+    lng: {
+      type: Number,
+      default: null
+    }
+  },
   image: {
     type: String,
     default: '📦'

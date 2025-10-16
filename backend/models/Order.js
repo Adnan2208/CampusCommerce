@@ -64,6 +64,78 @@ const orderSchema = new mongoose.Schema({
   pickupLocation: {
     type: String,
     required: true
+  },
+  pickupCoordinates: {
+    lat: {
+      type: Number,
+      default: null
+    },
+    lng: {
+      type: Number,
+      default: null
+    }
+  },
+  liveTracking: {
+    enabled: {
+      type: Boolean,
+      default: false
+    },
+    buyerLocation: {
+      lat: {
+        type: Number,
+        default: null
+      },
+      lng: {
+        type: Number,
+        default: null
+      },
+      lastUpdated: {
+        type: Date,
+        default: null
+      }
+    },
+    sellerLocation: {
+      lat: {
+        type: Number,
+        default: null
+      },
+      lng: {
+        type: Number,
+        default: null
+      },
+      lastUpdated: {
+        type: Date,
+        default: null
+      }
+    }
+  },
+  payment: {
+    status: {
+      type: String,
+      enum: ['pending', 'completed', 'failed'],
+      default: 'pending'
+    },
+    amount: {
+      type: Number,
+      required: true
+    },
+    upiId: {
+      type: String,
+      default: null
+    },
+    transactionId: {
+      type: String,
+      default: null
+    },
+    paidAt: {
+      type: Date,
+      default: null
+    },
+    paymentMethod: {
+      type: String,
+      enum: ['upi', 'cash'],
+      default: 'upi'
+    }
   }
 }, {
   timestamps: true

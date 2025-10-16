@@ -27,6 +27,9 @@ Create/Update `.env` file with your MongoDB URI and also create an empty uploads
 ```env
 MONGODB_URI=MONGODB_URI_GOES_HERE
 PORT=5000
+JWT_SECRET=your_secure_jwt_secret_key_here
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_app_password
 ```
 
 Then run:
@@ -42,6 +45,22 @@ Open a **new terminal**:
 ```bash
 cd frontend
 npm install
+```
+
+Create a `.env` file in the frontend directory for Google Maps API:
+```env
+VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
+```
+
+**Getting Google Maps API Key:**
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing one
+3. Enable **Maps JavaScript API** and **Geocoding API**
+4. Create credentials (API Key)
+5. Copy the API key to your `.env` file
+
+Then start the frontend:
+```bash
 npm run dev
 ```
 
@@ -57,10 +76,16 @@ npm run dev
 ## ✨ Features
 
 - 🔍 **Search & Filter** - Real-time search and category filtering
-- 📦 **Sell Items** - List items with image upload
+- 📦 **Sell Items** - List items with image upload and pickup location
 - ❤️ **Favorites** - Mark products as favorites
 - 📱 **Responsive Design** - Modern UI with gradient theme
 - 🔄 **Live Updates** - Dynamic product listings from database
+- 🔐 **Authentication** - Secure user registration with email verification
+- 📍 **Location Tracking** - Live GPS tracking for buyer-seller meetups
+- 🗺️ **Google Maps Integration** - Visual pickup location and live tracking
+- 📦 **Order Management** - Complete order lifecycle with status tracking
+- 💳 **UPI Payments** - Integrated UPI payment system with deep links
+- 💰 **Multiple Payment Methods** - Support for UPI and cash payments
 
 ## 🛠️ Tech Stack
 
@@ -78,16 +103,50 @@ npm run dev
 
 ## 📡 API Endpoints
 
+### Authentication Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/signup` | Register new user |
+| POST | `/api/auth/verify-email` | Verify email with code |
+| POST | `/api/auth/login` | Login user |
+| GET | `/api/auth/profile` | Get user profile (auth required) |
+| PUT | `/api/auth/profile` | Update user profile (auth required) |
+
+### Product Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/products` | Get all products (with filters) |
 | GET | `/api/products?search=laptop` | Search products |
 | GET | `/api/products?category=Books` | Filter by category |
 | GET | `/api/products/:id` | Get single product |
-| POST | `/api/products` | Create new product |
-| PUT | `/api/products/:id` | Update product |
-| DELETE | `/api/products/:id` | Delete product |
-| PATCH | `/api/products/:id/sold` | Mark as sold |
+| POST | `/api/products` | Create new product (auth required) |
+| PUT | `/api/products/:id` | Update product (auth required) |
+| DELETE | `/api/products/:id` | Delete product (auth required) |
+| PATCH | `/api/products/:id/sold` | Mark as sold (auth required) |
+
+### Order Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/orders` | Create new order (auth required) |
+| GET | `/api/orders/buyer` | Get orders as buyer (auth required) |
+| GET | `/api/orders/seller` | Get orders as seller (auth required) |
+| PATCH | `/api/orders/:id/status` | Update order status (auth required) |
+| DELETE | `/api/orders/:id` | Cancel order (auth required) |
+
+### 📍 Location Tracking Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/orders/:orderId/enable-tracking` | Enable live tracking for an order |
+| PATCH | `/api/orders/:orderId/update-location` | Update buyer/seller location |
+| GET | `/api/orders/:orderId/tracking` | Get live tracking data |
+
+### 💳 Payment Endpoints (NEW)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/payments/:orderId/initiate` | Get payment details (UPI ID, amount) |
+| POST | `/api/payments/:orderId/complete` | Mark UPI payment as complete |
+| POST | `/api/payments/:orderId/cash` | Mark cash payment as complete |
+| GET | `/api/payments/:orderId/status` | Get payment status |
 
 ## 🎨 UI Theme
 
@@ -112,7 +171,72 @@ npm run build   # Build for production
 npm run preview # Preview production build
 ```
 
-## 🐛 Troubleshooting
+## � Live Location Tracking
+
+CampusCommerce includes a real-time location tracking feature for safe buyer-seller meetups.
+
+### How It Works
+
+1. **Seller Sets Pickup Location**
+   - When creating a product listing, seller selects a pickup location on Google Maps
+   - Coordinates are saved with the product
+
+2. **Buyer Places Order**
+   - Buyer can see the predefined pickup location on the map
+   - Order is sent to seller for approval
+
+3. **Seller Accepts Order**
+   - When seller accepts, live tracking is automatically enabled
+   - Both parties receive a "Track Location" button
+
+4. **Real-time Tracking**
+   - Both buyer and seller can see each other's live location
+   - Locations update every 10 seconds
+   - Three markers shown: pickup point (📍), buyer (🔵), seller (🔴)
+
+5. **Complete Transaction**
+   - When seller marks order as completed, tracking automatically stops
+
+### Security Features
+
+- ✅ Location sharing only enabled after seller approval
+- ✅ Tracking stops when order is completed/cancelled
+- ✅ Both parties must grant browser location permissions
+- ✅ Location data is temporary and tied to active orders
+
+### Usage Example
+
+```javascript
+// Enable tracking when order is accepted
+POST /api/orders/:orderId/enable-tracking
+{
+  "pickupCoordinates": {
+    "lat": 28.7041,
+    "lng": 77.1025
+  }
+}
+
+// Update your location (buyer or seller)
+PATCH /api/orders/:orderId/update-location
+{
+  "lat": 28.7042,
+  "lng": 77.1026
+}
+
+// Get current tracking status
+GET /api/orders/:orderId/tracking
+// Returns: { buyerLocation, sellerLocation, pickupCoordinates, enabled }
+```
+
+### Browser Permissions
+
+The app requires **Geolocation** permission for live tracking. Users will see a browser prompt:
+- ✅ Allow → Live tracking works
+- ❌ Block → Fallback message shown
+
+**Note:** Geolocation requires HTTPS in production or localhost for development.
+
+## �🐛 Troubleshooting
 
 **MongoDB Connection Error:**
 ```
@@ -131,30 +255,72 @@ lsof -i :5000
 kill -9 <PID>
 ```
 
+**Google Maps Not Loading:**
+- ✅ Check `.env` file has `VITE_GOOGLE_MAPS_API_KEY`
+- ✅ Restart frontend dev server after adding .env
+- ✅ Verify API key is enabled in Google Cloud Console
+- ✅ Enable "Maps JavaScript API" and "Geocoding API"
+
+**Location Tracking Not Working:**
+- ✅ Grant browser location permissions
+- ✅ Use HTTPS or localhost (required for geolocation)
+- ✅ Ensure order is accepted by seller
+- ✅ Check network connection for location updates
+
+**Email Verification Not Sending:**
+- ✅ Configure `EMAIL_USER` and `EMAIL_PASS` in backend `.env`
+- ✅ Use Gmail App Password (not regular password)
+- ✅ Enable "Less secure app access" or use OAuth2
+
 ## 📂 Directory Structure
 
 ```
 CampusCommerce/
 ├── frontend/
 │   ├── src/
-│   │   ├── StudentMarketplace.jsx  # Main component
+│   │   ├── components/
+│   │   │   ├── auth/
+│   │   │   │   ├── LoginPage.jsx        # Login form
+│   │   │   │   └── SignupPage.jsx       # Signup & verification
+│   │   │   ├── home/
+│   │   │   │   └── HomePage.jsx         # Product browsing
+│   │   │   ├── shared/
+│   │   │   │   └── Header.jsx           # Navigation bar
+│   │   │   └── LocationTracker.jsx      # Live tracking component
 │   │   ├── services/
-│   │   │   └── api.js              # API service
+│   │   │   └── api.js                   # API service
+│   │   ├── StudentMarketplace.jsx       # Main app container
 │   │   ├── main.jsx
 │   │   └── index.css
+│   ├── .env                             # Google Maps API key
 │   ├── index.html
 │   ├── package.json
 │   └── vite.config.js
 ├── backend/
 │   ├── models/
-│   │   └── Product.js              # MongoDB schema
+│   │   ├── Product.js                   # Product schema + coordinates
+│   │   ├── Order.js                     # Order schema + tracking
+│   │   ├── User.js                      # User authentication
+│   │   └── VerificationCode.js          # Email verification
 │   ├── controllers/
-│   │   └── productController.js    # Business logic
+│   │   ├── productController.js         # Product logic
+│   │   └── orderController.js           # Order + tracking logic
 │   ├── routes/
-│   │   └── productRoutes.js        # API routes
-│   ├── server.js                   # Express server
-│   ├── seed.js                     # Database seeder
-│   ├── .env                        # Environment variables
+│   │   ├── productRoutes.js             # Product API
+│   │   ├── orderRoutes.js               # Order + tracking API
+│   │   ├── authRoutes.js                # Authentication API
+│   │   └── uploadRoutes.js              # Image upload
+│   ├── middleware/
+│   │   └── auth.js                      # JWT authentication
+│   ├── utils/
+│   │   └── emailService.js              # Email verification
+│   ├── uploads/                         # Uploaded images
+│   ├── server.js                        # Express server
+│   ├── seed.js                          # Database seeder
+│   ├── .env                             # Environment variables
 │   └── package.json
-└── MONGODB_SETUP.md                # MongoDB guide
+├── README.md                            # This file
+├── MONGODB_SETUP.md                     # MongoDB guide
+├── QUICK_START.md                       # Quick start guide
+└── REFACTORING_PLAN.md                  # Component structure
 ```

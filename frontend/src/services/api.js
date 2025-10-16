@@ -186,4 +186,76 @@ export const orderAPI = {
   },
 };
 
+// Payment API calls
+export const paymentAPI = {
+  // Initiate payment - Get payment details
+  initiatePayment: async (orderId) => {
+    try {
+      const response = await api.get(`/payments/${orderId}/initiate`);
+      return response.data;
+    } catch (error) {
+      console.error('Error initiating payment:', error);
+      throw error;
+    }
+  },
+
+  // Complete UPI payment
+  completePayment: async (orderId, paymentData) => {
+    try {
+      const response = await api.post(`/payments/${orderId}/complete`, paymentData);
+      return response.data;
+    } catch (error) {
+      console.error('Error completing payment:', error);
+      throw error;
+    }
+  },
+
+  // Mark cash payment
+  markCashPayment: async (orderId) => {
+    try {
+      const response = await api.post(`/payments/${orderId}/cash`);
+      return response.data;
+    } catch (error) {
+      console.error('Error marking cash payment:', error);
+      throw error;
+    }
+  },
+
+  // Get payment status
+  getPaymentStatus: async (orderId) => {
+    try {
+      const response = await api.get(`/payments/${orderId}/status`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting payment status:', error);
+      throw error;
+    }
+  },
+};
+
+// User/Profile API calls
+export const userAPI = {
+  // Update user profile
+  updateProfile: async (profileData) => {
+    try {
+      const response = await api.put('/auth/profile', profileData);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      throw error;
+    }
+  },
+
+  // Get current user profile
+  getProfile: async () => {
+    try {
+      const response = await api.get('/auth/me');
+      return response.data;
+    } catch (error) {
+      console.error('Error getting profile:', error);
+      throw error;
+    }
+  },
+};
+
 export default api;

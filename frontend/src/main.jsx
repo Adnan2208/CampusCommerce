@@ -3,5 +3,5 @@ import StudentMarketplace from "./StudentMarketplace";
 import "./index.css";
 
 createRoot(document.getElementById("root")).render(
-    <StudentMarketplace />
+        <StudentMarketplace/>
 );
