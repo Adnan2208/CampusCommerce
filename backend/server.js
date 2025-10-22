@@ -38,6 +38,25 @@ app.get('/', (req, res) => {
   res.json({ message: 'Welcome to CampusCommerce API' });
 });
 
+// UPI Payment Redirect Route
+app.get('/pay', (req, res) => {
+  const { pa, pn, am, tn } = req.query;
+  
+  // Validate required parameters
+  if (!pa || !pn || !am || !tn) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Missing required payment parameters' 
+    });
+  }
+  
+  // Generate UPI deep link
+  const upiLink = `upi://pay?pa=${encodeURIComponent(pa)}&pn=${encodeURIComponent(pn)}&am=${encodeURIComponent(am)}&tn=${encodeURIComponent(tn)}&cu=INR`;
+  
+  // Redirect to UPI link
+  res.redirect(upiLink);
+});
+
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {

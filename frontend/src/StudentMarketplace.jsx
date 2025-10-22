@@ -1732,11 +1732,11 @@ const StudentMarketplace = () => {
                 name="upiId"
                 value={userProfile.upiId || ''}
                 onChange={handleProfileInputChange}
-                placeholder="yourname@paytm or yourname@phonepe"
+                placeholder="yourname@upi"
                 className="w-full px-5 py-4 border-2 border-green-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all text-gray-800 bg-white"
               />
               <p className="text-xs text-gray-500 mt-2">
-                💡 Enter your UPI ID (e.g., yourname@paytm, yourname@phonepe, yourname@googlepay)
+                💡 Enter your UPI ID (e.g., yourname@paytm, yourname@googlepay, yourname@ybl)
               </p>
               {!userProfile.upiId && (
                 <div className="mt-3 flex items-start gap-2 text-sm text-orange-700 bg-orange-50 p-3 rounded-lg border border-orange-200">

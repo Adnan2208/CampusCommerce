@@ -38,18 +38,16 @@ const PaymentModal = ({ order, onClose, onPaymentComplete }) => {
 
   const generateUPILink = (details) => {
     try {
-      // Generate UPI deep link using Android Intent format
-      // Format: intent://pay?pa=<VPA>&pn=<Name>&am=<Amount>&tn=<Note>&cu=INR#Intent;scheme=upi;end
+      // Generate redirect URL that will create UPI deep link
       const params = new URLSearchParams({
         pa: details.sellerUpiId,           // Payee Address (UPI ID)
         pn: details.sellerName,            // Payee Name
         am: details.amount.toString(),     // Amount
-        tn: details.transactionNote || `Payment for ${details.productTitle}`, // Transaction Note
-        cu: 'INR'                          // Currency
+        tn: details.transactionNote || `Payment for ${details.productTitle}` // Transaction Note
       });
 
-      // Android Intent format - works better on Android devices
-      const link = `intent://pay?${params.toString()}#Intent;scheme=upi;end`;
+      // Use backend redirect endpoint
+      const link = `http://localhost:5000/pay?${params.toString()}`;
       setUpiLink(link);
     } catch (err) {
       console.error('Generate UPI link error:', err);
@@ -59,8 +57,8 @@ const PaymentModal = ({ order, onClose, onPaymentComplete }) => {
 
   const handleUPIPayment = () => {
     if (upiLink) {
-      // Open UPI app
-      window.open(upiLink, '_blank');
+      // Redirect to backend endpoint which will redirect to UPI app
+      window.location.href = upiLink;
     }
   };
 
