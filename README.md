@@ -23,13 +23,22 @@ cd backend
 npm install
 ```
 
-Create/Update `.env` file with your MongoDB URI and also create an empty uploads folder:
+**Configure Environment Variables:**
+
+Copy the example file and edit it:
+```bash
+cp .env.example .env
+```
+
+See [ENV_SETUP.md](./ENV_SETUP.md) for detailed environment variable documentation.
+
+Quick setup - update `.env` with:
 ```env
-MONGODB_URI=MONGODB_URI_GOES_HERE
+MONGODB_URI=mongodb://127.0.0.1:27017/campuscommerce
 PORT=5000
 JWT_SECRET=your_secure_jwt_secret_key_here
-EMAIL_USER=your_email@gmail.com
-EMAIL_PASS=your_app_password
+EMAIL_USER=your_email@gmail.com  # Optional
+EMAIL_PASS=your_app_password      # Optional
 ```
 
 Then run:
@@ -47,17 +56,20 @@ cd frontend
 npm install
 ```
 
-Create a `.env` file in the frontend directory for Google Maps API:
-```env
-VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
+**Configure Environment Variables:**
+
+Copy the example file and edit it:
+```bash
+cp .env.example .env
 ```
 
-**Getting Google Maps API Key:**
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing one
-3. Enable **Maps JavaScript API** and **Geocoding API**
-4. Create credentials (API Key)
-5. Copy the API key to your `.env` file
+Update `.env` with:
+```env
+VITE_API_URL=http://localhost:5000/api
+VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here  # Optional
+```
+
+**Note:** See [ENV_SETUP.md](./ENV_SETUP.md) for detailed configuration guide.
 
 Then start the frontend:
 ```bash

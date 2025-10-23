@@ -46,8 +46,9 @@ const PaymentModal = ({ order, onClose, onPaymentComplete }) => {
         tn: details.transactionNote || `Payment for ${details.productTitle}` // Transaction Note
       });
 
-      // Use backend redirect endpoint
-      const link = `http://localhost:5000/pay?${params.toString()}`;
+      // Use backend redirect endpoint (remove /api from base URL)
+      const baseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+      const link = `${baseUrl}/pay?${params.toString()}`;
       setUpiLink(link);
     } catch (err) {
       console.error('Generate UPI link error:', err);

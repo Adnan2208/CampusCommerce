@@ -81,7 +81,8 @@ const seedProducts = [
 
 const seedDatabase = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
+    const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/campuscommerce';
+    await mongoose.connect(MONGODB_URI);
     console.log('✅ Connected to MongoDB');
 
     // Clear existing products
