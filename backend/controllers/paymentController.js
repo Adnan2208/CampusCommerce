@@ -77,8 +77,15 @@ export const initiatePayment = async (req, res) => {
 export const completePayment = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { transactionId, upiId } = req.body;
     const userId = req.user.userId;
+
+    // Check if screenshot was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment screenshot is required'
+      });
+    }
 
     // Find the order
     const order = await Order.findById(orderId);
@@ -105,17 +112,16 @@ export const completePayment = async (req, res) => {
       });
     }
 
-    // Update payment status
-    order.payment.status = 'completed';
-    order.payment.transactionId = transactionId;
-    order.payment.upiId = upiId;
-    order.payment.paidAt = new Date();
+    // Update payment status to pending approval
+    order.payment.status = 'pending_approval';
+    order.payment.paymentScreenshot = `/uploads/${req.file.filename}`;
+    order.payment.paymentMethod = 'upi';
 
     await order.save();
 
     res.status(200).json({
       success: true,
-      message: 'Payment completed successfully',
+      message: 'Payment screenshot uploaded. Waiting for seller approval.',
       data: order
     });
 
@@ -231,6 +237,65 @@ export const markCashPayment = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to record cash payment',
+      error: error.message
+    });
+  }
+};
+
+// Seller approves or rejects payment
+export const approvePayment = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { approved } = req.body; // true to approve, false to reject
+    const userId = req.user.userId;
+
+    // Find the order
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Verify seller is approving the payment
+    if (order.sellerId.toString() !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the seller can approve payment'
+      });
+    }
+
+    // Check if payment is pending approval
+    if (order.payment.status !== 'pending_approval') {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment is not pending approval'
+      });
+    }
+
+    // Update payment status based on approval
+    if (approved) {
+      order.payment.status = 'completed';
+      order.payment.paidAt = new Date();
+    } else {
+      order.payment.status = 'failed';
+      order.payment.paymentScreenshot = null; // Clear screenshot if rejected
+    }
+
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: approved ? 'Payment approved successfully' : 'Payment rejected',
+      data: order
+    });
+
+  } catch (error) {
+    console.error('Approve payment error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process payment approval',
       error: error.message
     });
   }

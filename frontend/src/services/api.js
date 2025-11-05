@@ -199,10 +199,17 @@ export const paymentAPI = {
     }
   },
 
-  // Complete UPI payment
-  completePayment: async (orderId, paymentData) => {
+  // Complete UPI payment with screenshot
+  completePayment: async (orderId, screenshotFile) => {
     try {
-      const response = await api.post(`/payments/${orderId}/complete`, paymentData);
+      const formData = new FormData();
+      formData.append('screenshot', screenshotFile);
+      
+      const response = await api.post(`/payments/${orderId}/complete`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       return response.data;
     } catch (error) {
       console.error('Error completing payment:', error);
@@ -228,6 +235,17 @@ export const paymentAPI = {
       return response.data;
     } catch (error) {
       console.error('Error getting payment status:', error);
+      throw error;
+    }
+  },
+
+  // Approve or reject payment (seller only)
+  approvePayment: async (orderId, approved) => {
+    try {
+      const response = await api.post(`/payments/${orderId}/approve`, { approved });
+      return response.data;
+    } catch (error) {
+      console.error('Error approving payment:', error);
       throw error;
     }
   },

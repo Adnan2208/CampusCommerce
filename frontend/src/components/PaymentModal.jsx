@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
-import { X, CreditCard, Wallet, CheckCircle, AlertCircle, Copy, ExternalLink } from 'lucide-react';
+import { X, CreditCard, Wallet, CheckCircle, AlertCircle, Copy, Upload, Image, QrCode } from 'lucide-react';
 import { paymentAPI } from '../services/api';
+import qrCodeImage from '../assets/AdnanQR.jpeg';
 
 const PaymentModal = ({ order, onClose, onPaymentComplete }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [paymentDetails, setPaymentDetails] = useState(null);
-  const [transactionId, setTransactionId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('upi'); // 'upi' or 'cash'
-  const [upiLink, setUpiLink] = useState('');
   const [copied, setCopied] = useState(false);
+  const [screenshotFile, setScreenshotFile] = useState(null);
+  const [screenshotPreview, setScreenshotPreview] = useState(null);
 
   useEffect(() => {
     fetchPaymentDetails();
@@ -24,7 +25,6 @@ const PaymentModal = ({ order, onClose, onPaymentComplete }) => {
 
       if (data.success) {
         setPaymentDetails(data.data);
-        generateUPILink(data.data);
       } else {
         setError(data.message || 'Failed to fetch payment details');
       }
@@ -36,36 +36,36 @@ const PaymentModal = ({ order, onClose, onPaymentComplete }) => {
     }
   };
 
-  const generateUPILink = (details) => {
-    try {
-      // Generate redirect URL that will create UPI deep link
-      const params = new URLSearchParams({
-        pa: details.sellerUpiId,           // Payee Address (UPI ID)
-        pn: details.sellerName,            // Payee Name
-        am: details.amount.toString(),     // Amount
-        tn: details.transactionNote || `Payment for ${details.productTitle}` // Transaction Note
-      });
+  const handleScreenshotChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setError('Please upload an image file');
+        return;
+      }
+      
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        setError('File size must be less than 5MB');
+        return;
+      }
 
-      // Use backend redirect endpoint (remove /api from base URL)
-      const baseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
-      const link = `${baseUrl}/pay?${params.toString()}`;
-      setUpiLink(link);
-    } catch (err) {
-      console.error('Generate UPI link error:', err);
-      setError('Failed to generate UPI payment link');
-    }
-  };
-
-  const handleUPIPayment = () => {
-    if (upiLink) {
-      // Redirect to backend endpoint which will redirect to UPI app
-      window.location.href = upiLink;
+      setScreenshotFile(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setScreenshotPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+      setError(null);
     }
   };
 
   const handleCompletePayment = async () => {
-    if (paymentMethod === 'upi' && !transactionId.trim()) {
-      setError('Please enter transaction ID');
+    if (paymentMethod === 'upi' && !screenshotFile) {
+      setError('Please upload payment screenshot');
       return;
     }
 
@@ -75,10 +75,7 @@ const PaymentModal = ({ order, onClose, onPaymentComplete }) => {
 
       let data;
       if (paymentMethod === 'upi') {
-        data = await paymentAPI.completePayment(order._id, {
-          transactionId,
-          upiId: paymentDetails?.sellerUpiId
-        });
+        data = await paymentAPI.completePayment(order._id, screenshotFile);
       } else {
         data = await paymentAPI.markCashPayment(order._id);
       }
@@ -190,48 +187,85 @@ const PaymentModal = ({ order, onClose, onPaymentComplete }) => {
               {/* UPI Payment Section */}
               {paymentMethod === 'upi' && (
                 <div className="space-y-4">
-                  {/* UPI ID */}
-                  <div className="bg-slate-700/50 rounded-xl p-4 border border-slate-600">
-                    <label className="text-gray-400 text-sm mb-2 block">Pay to UPI ID:</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={paymentDetails?.sellerUpiId || ''}
-                        readOnly
-                        className="flex-1 bg-slate-800 text-white px-4 py-2 rounded-lg border border-slate-600"
+                  {/* QR Code Display */}
+                  <div className="bg-white rounded-xl p-6 border border-slate-600 flex flex-col items-center">
+                    <div className="flex items-center gap-2 mb-3">
+                      <QrCode size={24} className="text-blue-600" />
+                      <h3 className="text-slate-800 font-bold text-lg">Scan QR Code to Pay</h3>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg shadow-lg">
+                      <img 
+                        src={qrCodeImage} 
+                        alt="UPI QR Code" 
+                        className="w-64 h-64 object-contain"
                       />
-                      <button
-                        onClick={() => copyToClipboard(paymentDetails?.sellerUpiId)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all flex items-center gap-2"
-                      >
-                        <Copy size={16} />
-                        {copied ? 'Copied!' : 'Copy'}
-                      </button>
+                    </div>
+                    <div className="mt-3 text-center">
+                      <p className="text-slate-700 font-semibold text-sm">UPI ID: adnan.c2208@okaxis</p>
+                      <p className="text-slate-600 text-sm mt-1">Adnan Chherawala</p>
                     </div>
                   </div>
 
-                  {/* Pay with UPI App Button */}
-                  <button
-                    onClick={handleUPIPayment}
-                    disabled={!upiLink}
-                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ExternalLink size={20} />
-                    Pay with UPI App
-                  </button>
+                  {/* Payment Instructions Note */}
+                  <div className="bg-blue-900/30 border border-blue-600/50 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle size={20} className="text-blue-400 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm text-blue-200">
+                        <p className="font-semibold mb-1">Payment Instructions</p>
+                        <ol className="list-decimal list-inside space-y-1">
+                          <li>Scan the QR code above using any UPI app (Google Pay, PhonePe, Paytm, etc.)</li>
+                          <li>Complete the payment of ₹{paymentDetails?.amount}</li>
+                          <li>Take a screenshot of the successful transaction</li>
+                          <li>Upload the screenshot below to complete the order</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
 
-                  {/* Transaction ID Input */}
+                  {/* Screenshot Upload */}
                   <div>
                     <label className="text-gray-300 text-sm mb-2 block">
-                      After payment, enter Transaction ID:
+                      Upload Payment Screenshot:
                     </label>
-                    <input
-                      type="text"
-                      value={transactionId}
-                      onChange={(e) => setTransactionId(e.target.value)}
-                      placeholder="Enter UPI Transaction ID"
-                      className="w-full bg-slate-700 text-white px-4 py-3 rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                    />
+                    <div className="space-y-3">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleScreenshotChange}
+                        className="hidden"
+                        id="screenshot-upload"
+                      />
+                      <label
+                        htmlFor="screenshot-upload"
+                        className="w-full bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg border border-slate-600 cursor-pointer transition-all flex items-center justify-center gap-2"
+                      >
+                        <Upload size={20} />
+                        {screenshotFile ? 'Change Screenshot' : 'Choose Screenshot'}
+                      </label>
+                      
+                      {screenshotPreview && (
+                        <div className="relative bg-slate-700/50 rounded-xl p-3 border border-slate-600">
+                          <div className="flex items-center gap-3">
+                            <Image size={20} className="text-cyan-400" />
+                            <span className="text-sm text-gray-300 flex-1">{screenshotFile?.name}</span>
+                            <button
+                              onClick={() => {
+                                setScreenshotFile(null);
+                                setScreenshotPreview(null);
+                              }}
+                              className="text-red-400 hover:text-red-300"
+                            >
+                              <X size={18} />
+                            </button>
+                          </div>
+                          <img
+                            src={screenshotPreview}
+                            alt="Payment screenshot preview"
+                            className="mt-3 w-full rounded-lg max-h-48 object-contain bg-slate-800"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -253,15 +287,16 @@ const PaymentModal = ({ order, onClose, onPaymentComplete }) => {
               <div className="bg-blue-900/30 border border-blue-600/50 rounded-xl p-4">
                 <h4 className="text-blue-300 font-semibold mb-2 flex items-center gap-2">
                   <CheckCircle size={16} />
-                  Payment Instructions
+                  Complete Your Payment
                 </h4>
                 <ul className="text-sm text-blue-200 space-y-1">
                   {paymentMethod === 'upi' ? (
                     <>
-                      <li>• Click "Pay with UPI App" to open your UPI app</li>
-                      <li>• Complete the payment in the UPI app</li>
-                      <li>• Copy the transaction ID from your UPI app</li>
-                      <li>• Paste it above and click "Confirm Payment"</li>
+                      <li>• Scan the QR code with your UPI app</li>
+                      <li>• Complete the payment of ₹{paymentDetails?.amount}</li>
+                      <li>• Take a screenshot of the successful transaction</li>
+                      <li>• Upload the screenshot above and click "Submit Payment"</li>
+                      <li>• Transaction will be completed after seller verification</li>
                     </>
                   ) : (
                     <>
@@ -276,7 +311,7 @@ const PaymentModal = ({ order, onClose, onPaymentComplete }) => {
               {/* Submit Button */}
               <button
                 onClick={handleCompletePayment}
-                disabled={loading || (paymentMethod === 'upi' && !transactionId.trim())}
+                disabled={loading || (paymentMethod === 'upi' && !screenshotFile)}
                 className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
@@ -287,7 +322,7 @@ const PaymentModal = ({ order, onClose, onPaymentComplete }) => {
                 ) : (
                   <>
                     <CheckCircle size={20} />
-                    Confirm Payment
+                    {paymentMethod === 'upi' ? 'Submit Payment' : 'Confirm Payment'}
                   </>
                 )}
               </button>

@@ -1,5 +1,15 @@
-# 🎓 CampusCommerce - Student Marketplace# React + Vite
-A full-stack MERN application for buying and selling items within a campus community.This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+# 🎓 CampusCommerce - Student Marketplace
+
+A full-stack MERN application for buying and selling items within a campus community.
+
+## 📚 Documentation
+
+- **[ENV_SETUP.md](./ENV_SETUP.md)** - Environment variables configuration guide
+- **[DEPLOY_RENDER.md](./DEPLOY_RENDER.md)** - Step-by-step deployment guide for Render.com
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js (v18 or higher)

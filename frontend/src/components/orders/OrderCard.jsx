@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { CreditCard, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { CreditCard, CheckCircle, Clock, AlertCircle, Image as ImageIcon, X } from 'lucide-react';
 import PaymentModal from '../PaymentModal';
+import { paymentAPI } from '../../services/api';
 
 /**
  * OrderCard Component - Shows order details with payment integration
@@ -8,6 +9,9 @@ import PaymentModal from '../PaymentModal';
  */
 const OrderCard = ({ order, onOrderUpdate, userRole = 'buyer' }) => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showScreenshotModal, setShowScreenshotModal] = useState(false);
+  const [approveLoading, setApproveLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Determine if payment button should be shown
   const showPaymentButton = () => {
@@ -40,6 +44,24 @@ const OrderCard = ({ order, onOrderUpdate, userRole = 'buyer' }) => {
               (ID: {order.payment.transactionId})
             </span>
           )}
+        </div>
+      );
+    }
+
+    if (status === 'pending_approval') {
+      return (
+        <div className="flex items-center gap-2 bg-orange-900/30 border border-orange-600 text-orange-300 px-3 py-2 rounded-lg text-sm">
+          <Clock size={16} />
+          <span>Payment Pending Approval</span>
+        </div>
+      );
+    }
+
+    if (status === 'failed') {
+      return (
+        <div className="flex items-center gap-2 bg-red-900/30 border border-red-600 text-red-300 px-3 py-2 rounded-lg text-sm">
+          <AlertCircle size={16} />
+          <span>Payment Rejected</span>
         </div>
       );
     }
@@ -88,6 +110,34 @@ const OrderCard = ({ order, onOrderUpdate, userRole = 'buyer' }) => {
     if (onOrderUpdate) {
       onOrderUpdate(updatedOrder);
     }
+  };
+
+  const handleApprovePayment = async (approved) => {
+    try {
+      setApproveLoading(true);
+      setError(null);
+      
+      const data = await paymentAPI.approvePayment(order._id, approved);
+      
+      if (data.success) {
+        if (onOrderUpdate) {
+          onOrderUpdate(data.data);
+        }
+        setShowScreenshotModal(false);
+      } else {
+        setError(data.message || 'Failed to process payment approval');
+      }
+    } catch (err) {
+      console.error('Approve payment error:', err);
+      setError(err.response?.data?.message || 'Network error. Please try again.');
+    } finally {
+      setApproveLoading(false);
+    }
+  };
+
+  // Show approve payment buttons for seller
+  const showApprovalButtons = () => {
+    return userRole === 'seller' && order.payment?.status === 'pending_approval';
   };
 
   return (
@@ -156,6 +206,33 @@ const OrderCard = ({ order, onOrderUpdate, userRole = 'buyer' }) => {
             </div>
           </div>
         )}
+
+        {/* Seller Approval Section */}
+        {showApprovalButtons() && (
+          <div className="mt-4 space-y-3">
+            <button
+              onClick={() => setShowScreenshotModal(true)}
+              className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+            >
+              <ImageIcon size={20} />
+              View Payment Screenshot
+            </button>
+            
+            {error && (
+              <div className="bg-red-900/50 border border-red-600 text-red-200 px-4 py-3 rounded-lg flex items-start gap-3">
+                <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Payment pending approval notice for buyer */}
+        {userRole === 'buyer' && order.payment?.status === 'pending_approval' && (
+          <div className="mt-4 bg-orange-900/30 border border-orange-600 text-orange-200 px-4 py-3 rounded-lg text-sm">
+            <p>Your payment screenshot has been submitted. Waiting for seller to verify and approve.</p>
+          </div>
+        )}
       </div>
 
       {/* Payment Modal */}
@@ -165,6 +242,101 @@ const OrderCard = ({ order, onOrderUpdate, userRole = 'buyer' }) => {
           onClose={() => setShowPaymentModal(false)}
           onPaymentComplete={handlePaymentComplete}
         />
+      )}
+
+      {/* Screenshot Modal */}
+      {showScreenshotModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-slate-800 to-blue-900 rounded-3xl max-w-2xl w-full shadow-2xl border border-blue-500/30 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-cyan-600 px-6 py-4 flex justify-between items-center rounded-t-3xl">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <ImageIcon size={28} />
+                Payment Screenshot
+              </h2>
+              <button
+                onClick={() => setShowScreenshotModal(false)}
+                className="text-white hover:bg-white/20 rounded-full p-2 transition-all"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Order Info */}
+              <div className="bg-slate-700/50 rounded-xl p-4 border border-slate-600">
+                <h3 className="text-white font-semibold mb-3">Order Details</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Product:</span>
+                    <span className="text-white">{order.productTitle}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Amount:</span>
+                    <span className="text-cyan-400 font-bold">₹{order.productPrice}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Buyer:</span>
+                    <span className="text-white">{order.buyerName}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Screenshot */}
+              {order.payment?.paymentScreenshot && (
+                <div className="bg-slate-700/50 rounded-xl p-4 border border-slate-600">
+                  <h3 className="text-white font-semibold mb-3">Payment Screenshot</h3>
+                  <img
+                    src={`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'}${order.payment.paymentScreenshot}`}
+                    alt="Payment screenshot"
+                    className="w-full rounded-lg border border-slate-600"
+                  />
+                </div>
+              )}
+
+              {/* Error Message */}
+              {error && (
+                <div className="bg-red-900/50 border border-red-600 text-red-200 px-4 py-3 rounded-lg flex items-start gap-3">
+                  <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {/* Approval Buttons */}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => handleApprovePayment(false)}
+                  disabled={approveLoading}
+                  className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {approveLoading ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  ) : (
+                    <>
+                      <X size={20} />
+                      Reject
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleApprovePayment(true)}
+                  disabled={approveLoading}
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {approveLoading ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  ) : (
+                    <>
+                      <CheckCircle size={20} />
+                      Approve
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

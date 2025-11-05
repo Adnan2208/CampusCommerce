@@ -112,7 +112,7 @@ const orderSchema = new mongoose.Schema({
   payment: {
     status: {
       type: String,
-      enum: ['pending', 'completed', 'failed'],
+      enum: ['pending', 'pending_approval', 'completed', 'failed'],
       default: 'pending'
     },
     amount: {
@@ -124,6 +124,10 @@ const orderSchema = new mongoose.Schema({
       default: null
     },
     transactionId: {
+      type: String,
+      default: null
+    },
+    paymentScreenshot: {
       type: String,
       default: null
     },

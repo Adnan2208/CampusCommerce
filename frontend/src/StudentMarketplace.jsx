@@ -761,6 +761,12 @@ const StudentMarketplace = () => {
 
   const handleSignup = async (e) => {
     e.preventDefault();
+    //Validate Email
+
+    if (authForm.email.endsWith('@kjei.edu.in')=== false){
+      alert('⚠️ Please use your college email (ending with @kjei.edu.in) to sign up!');
+      return;
+    }
 
     // Validate passwords match
     if (authForm.password !== authForm.confirmPassword) {
@@ -2211,30 +2217,30 @@ const StudentMarketplace = () => {
                   <div className="mb-6">
                     <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
                       <MapPin size={18} className="text-blue-600" />
-                      Pickup Location on Map
+                      Pickup Location
                     </h3>
-                    {import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.VITE_GOOGLE_MAPS_API_KEY !== 'YOUR_API_KEY_HERE' ? (
-                      <div className="rounded-xl overflow-hidden border-2 border-gray-200">
-                        <iframe
-                          width="100%"
-                          height="250"
-                          frameBorder="0"
-                          style={{ border: 0 }}
-                          src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${selectedProduct.coordinates.lat},${selectedProduct.coordinates.lng}&zoom=15`}
-                          allowFullScreen
-                          title="Pickup Location Map"
-                        ></iframe>
+                    <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-xl p-6">
+                      <div className="flex items-start gap-4">
+                        <div className="bg-blue-600 text-white p-3 rounded-lg">
+                          <MapPin size={24} />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-gray-700 font-medium mb-2">{selectedProduct.pickupLocation}</p>
+                          <p className="text-xs text-gray-500 mb-3">
+                            📍 {selectedProduct.coordinates.lat.toFixed(6)}, {selectedProduct.coordinates.lng.toFixed(6)}
+                          </p>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${selectedProduct.coordinates.lat},${selectedProduct.coordinates.lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition-all"
+                          >
+                            <MapPin size={16} />
+                            Open in Google Maps
+                          </a>
+                        </div>
                       </div>
-                    ) : (
-                      <div className="bg-gray-100 border-2 border-gray-200 rounded-xl p-8 text-center">
-                        <MapPin size={48} className="mx-auto text-gray-400 mb-2" />
-                        <p className="text-gray-600 font-medium mb-1">Map Preview Unavailable</p>
-                        <p className="text-sm text-gray-500">Add Google Maps API key to view location</p>
-                      </div>
-                    )}
-                    <p className="text-xs text-gray-500 mt-2">
-                      📍 Coordinates: {selectedProduct.coordinates.lat}, {selectedProduct.coordinates.lng}
-                    </p>
+                    </div>
                   </div>
                 )}
 
