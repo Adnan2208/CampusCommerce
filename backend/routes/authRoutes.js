@@ -141,7 +141,8 @@ router.post('/login', async (req, res) => {
         phone: user.phone,
         location: user.location,
         upiId: user.upiId,
-        initials: user.initials
+        initials: user.initials,
+        isAdmin: user.isAdmin || false
       }
     });
   } catch (error) {
@@ -196,7 +197,8 @@ router.get('/me', authenticateToken, async (req, res) => {
         phone: user.phone,
         location: user.location,
         upiId: user.upiId,
-        initials: user.initials
+        initials: user.initials,
+        isAdmin: user.isAdmin || false
       }
     });
   } catch (error) {
@@ -238,7 +240,8 @@ router.put('/profile', authenticateToken, async (req, res) => {
         phone: user.phone,
         location: user.location,
         upiId: user.upiId,
-        initials: user.initials
+        initials: user.initials,
+        isAdmin: user.isAdmin || false
       }
     });
   } catch (error) {

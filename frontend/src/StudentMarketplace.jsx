@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Search, User, Heart, Star, MapPin, MessageCircle, Plus, Home, Package, Edit2, Trash2, Store, X, ShoppingBag, Clock, CheckCircle, XCircle, CreditCard } from 'lucide-react';
 import { productAPI, orderAPI } from './services/api';
 import LocationTracker from './Components/LocationTracker';
 import PaymentModal from './components/PaymentModal';
+import GrievanceModal from './components/GrievanceModal';
+import AdminGrievancesDashboard from './components/AdminGrievancesDashboard';
 
 const StudentMarketplace = () => {
   // Authentication state
@@ -42,7 +45,8 @@ const StudentMarketplace = () => {
     phone: '',
     location: '',
     upiId: '',
-    initials: ''
+    initials: '',
+    isAdmin: false
   });
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   
@@ -78,6 +82,31 @@ const StudentMarketplace = () => {
   
   // Edit product state
   const [editingProduct, setEditingProduct] = useState(null);
+
+  // Grievance state
+  const [showGrievanceModal, setShowGrievanceModal] = useState(false);
+  const [showAdminGrievances, setShowAdminGrievances] = useState(false);
+
+  // React Query for user grievances
+  const { data: userGrievances = [], isLoading: loadingGrievances, isFetching: refreshingGrievances, refetch: refetchUserGrievances } = useQuery({
+    queryKey: ['userGrievances'],
+    queryFn: async () => {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch('http://localhost:5000/api/grievances/my-grievances', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to fetch grievances');
+      }
+      return data.grievances;
+    },
+    enabled: isAuthenticated && activePage === 'profile',
+    refetchInterval: 5000, // Auto-refresh every 5 seconds
+    staleTime: 3000,
+  });
 
   const categories = [
     { id: 1, name: 'Books', icon: '📚', color: 'bg-blue-100' },
@@ -151,69 +180,54 @@ const StudentMarketplace = () => {
     }
   }, []);
 
-  // Fetch products and orders when authenticated
+  // Fetch orders when authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      fetchProducts();
       fetchOrders();
     }
   }, [isAuthenticated]);
 
-  // Auto-refresh orders when on profile page
+  // Fetch orders when navigating to profile page
   useEffect(() => {
     if (isAuthenticated && activePage === 'profile') {
-      // Refresh orders immediately when navigating to profile
       fetchOrders();
-      
-      // Set up polling every 10 seconds
-      const intervalId = setInterval(() => {
-        fetchOrders();
-      }, 10000); // 10 seconds
-
-      // Cleanup interval on unmount or when leaving profile page
-      return () => clearInterval(intervalId);
     }
   }, [isAuthenticated, activePage]);
 
-  // Auto-refresh products when on home page
-  useEffect(() => {
-    if (isAuthenticated && activePage === 'home') {
-      // Refresh products immediately when navigating to home
-      fetchProducts(true);
-      
-      // Set up polling every 15 seconds to check for new products (no loading spinner for background refresh)
-      const intervalId = setInterval(() => {
-        fetchProducts(false);
-      }, 15000); // 15 seconds
-
-      // Cleanup interval on unmount or when leaving home page
-      return () => clearInterval(intervalId);
-    }
-  }, [isAuthenticated, activePage]);
-
-  const fetchProducts = async (showLoadingSpinner = true) => {
-    try {
-      if (showLoadingSpinner) {
-        setLoading(true);
-      }
-      setError(null);
+  // React Query for products
+  const { data: productsData, isLoading: productsLoading, error: productsError } = useQuery({
+    queryKey: ['products'],
+    queryFn: async () => {
       const response = await productAPI.getAll();
-      if (response.success) {
-        setProducts(response.data);
+      if (!response.success) {
+        throw new Error('Failed to load products');
       }
-    } catch (err) {
+      return response.data;
+    },
+    enabled: isAuthenticated && activePage === 'home',
+    refetchInterval: 10000, // Auto-refresh every 10 seconds
+    staleTime: 5000,
+    retry: 1,
+    onError: (err) => {
       console.error('Failed to fetch products:', err);
-      if (showLoadingSpinner) {
-        setError('Failed to load products. Using sample data.');
-        // Fallback to initial products if API fails
-        setProducts(initialProducts);
-      }
-    } finally {
-      if (showLoadingSpinner) {
-        setLoading(false);
-      }
     }
-  };
+  });
+
+  // Sync products data with state (for backward compatibility with existing code)
+  useEffect(() => {
+    if (productsData) {
+      setProducts(productsData);
+      setError(null);
+    } else if (productsError) {
+      setError('Failed to load products. Using sample data.');
+      setProducts(initialProducts);
+    }
+  }, [productsData, productsError]);
+
+  // Sync loading state
+  useEffect(() => {
+    setLoading(productsLoading);
+  }, [productsLoading]);
 
   const fetchOrders = async () => {
     try {
@@ -868,7 +882,7 @@ const StudentMarketplace = () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('userProfile');
     setAuthToken(null);
-    setUserProfile({ name: '', email: '', phone: '', location: '', upiId: '', initials: '' });
+    setUserProfile({ name: '', email: '', phone: '', location: '', upiId: '', initials: '', isAdmin: false });
     setIsAuthenticated(false);
     setActivePage('login');
     setProducts([]);
@@ -2039,6 +2053,145 @@ const StudentMarketplace = () => {
         )}
       </div>
 
+      {/* My Grievances Section - Only show for non-admin users */}
+      {!userProfile.isAdmin && (
+        <div className="backdrop-blur-xl bg-white/95 rounded-3xl shadow-2xl p-8 border border-white/20">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent flex items-center gap-2">
+                💬 My Grievances
+                <span className="text-lg font-normal text-gray-500">({userGrievances.length})</span>
+                {refreshingGrievances && (
+                  <span className="text-xs font-normal bg-orange-100 text-orange-600 px-2 py-1 rounded-full animate-pulse">
+                    Updating...
+                  </span>
+                )}
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">Auto-updates every 5 seconds</p>
+            </div>
+            <button
+              onClick={() => setShowGrievanceModal(true)}
+              className="bg-gradient-to-r from-orange-600 to-red-600 text-white px-5 py-2.5 rounded-xl font-medium hover:shadow-lg hover:shadow-orange-500/50 transition-all hover:scale-105 flex items-center gap-2"
+            >
+              <Plus size={18} />
+              New Grievance
+            </button>
+          </div>
+
+        {loadingGrievances ? (
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+            <p className="text-gray-600 mt-4">Loading your grievances...</p>
+          </div>
+        ) : userGrievances.length === 0 ? (
+          <div className="text-center py-16 text-gray-500">
+            <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-orange-100 to-red-100 rounded-2xl flex items-center justify-center">
+              <MessageCircle size={40} className="text-orange-600" />
+            </div>
+            <p className="text-lg font-medium text-gray-700 mb-2">No grievances submitted yet</p>
+            <p className="text-sm text-gray-500 mb-6">Have an issue? Let us know and we'll help you out!</p>
+            <button
+              onClick={() => setShowGrievanceModal(true)}
+              className="bg-gradient-to-r from-orange-600 to-red-600 text-white px-8 py-3 rounded-xl font-semibold hover:shadow-lg hover:shadow-orange-500/50 transition-all hover:scale-105"
+            >
+              💬 Submit Your First Grievance
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {userGrievances.map(grievance => (
+              <div key={grievance._id} className="border-2 border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-all duration-300 ease-in-out bg-white">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-start gap-3 mb-3">
+                      <h4 className="text-lg font-bold text-gray-800 flex-1">
+                        {grievance.subject}
+                      </h4>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold border-2 ${
+                        grievance.priority === 'High' ? 'bg-red-100 text-red-700 border-red-300' :
+                        grievance.priority === 'Medium' ? 'bg-orange-100 text-orange-700 border-orange-300' :
+                        'bg-green-100 text-green-700 border-green-300'
+                      }`}>
+                        {grievance.priority}
+                      </span>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold border-2 ${
+                        grievance.status === 'Open' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' :
+                        grievance.status === 'In Progress' ? 'bg-blue-100 text-blue-700 border-blue-300' :
+                        grievance.status === 'Resolved' ? 'bg-green-100 text-green-700 border-green-300' :
+                        'bg-gray-100 text-gray-700 border-gray-300'
+                      }`}>
+                        {grievance.status}
+                      </span>
+                    </div>
+
+                    <div className="mb-3">
+                      <span className="inline-block bg-blue-100 text-blue-700 px-3 py-1 rounded-lg text-xs font-semibold">
+                        {grievance.category}
+                      </span>
+                    </div>
+
+                    <p className="text-gray-700 text-sm mb-3 bg-gray-50 p-3 rounded-lg">
+                      {grievance.description}
+                    </p>
+
+                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <span>📅 Submitted: {new Date(grievance.createdAt).toLocaleDateString()}</span>
+                      <span>🕐 Updated: {new Date(grievance.updatedAt).toLocaleString()}</span>
+                    </div>
+
+                    {grievance.adminNotes && (
+                      <div className="mt-4 bg-blue-50 border-2 border-blue-200 p-4 rounded-lg">
+                        <div className="flex items-start gap-2 mb-2">
+                          <span className="text-blue-700 font-semibold text-sm">🛡️ Admin Response:</span>
+                        </div>
+                        <p className="text-sm text-blue-800">{grievance.adminNotes}</p>
+                      </div>
+                    )}
+
+                    {grievance.resolvedAt && (
+                      <div className="mt-3 flex items-center gap-2 text-sm text-green-600">
+                        <CheckCircle size={16} />
+                        <span>Resolved on {new Date(grievance.resolvedAt).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Status Progress Bar */}
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
+                    <span>Progress</span>
+                    <span className="font-medium">{
+                      grievance.status === 'Open' ? '25%' :
+                      grievance.status === 'In Progress' ? '50%' :
+                      grievance.status === 'Resolved' ? '75%' :
+                      '100%'
+                    }</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all ${
+                        grievance.status === 'Open' ? 'bg-yellow-500 w-1/4' :
+                        grievance.status === 'In Progress' ? 'bg-blue-500 w-1/2' :
+                        grievance.status === 'Resolved' ? 'bg-green-500 w-3/4' :
+                        'bg-gray-500 w-full'
+                      }`}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500 mt-2">
+                    <span className={grievance.status === 'Open' || grievance.status === 'In Progress' || grievance.status === 'Resolved' || grievance.status === 'Closed' ? 'text-gray-700 font-semibold' : ''}>Open</span>
+                    <span className={grievance.status === 'In Progress' || grievance.status === 'Resolved' || grievance.status === 'Closed' ? 'text-gray-700 font-semibold' : ''}>In Progress</span>
+                    <span className={grievance.status === 'Resolved' || grievance.status === 'Closed' ? 'text-gray-700 font-semibold' : ''}>Resolved</span>
+                    <span className={grievance.status === 'Closed' ? 'text-gray-700 font-semibold' : ''}>Closed</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        </div>
+      )}
+
       {/* Account Settings */}
       <div className="backdrop-blur-xl bg-white/95 rounded-3xl shadow-2xl p-8 border border-white/20">
         <h3 className="text-2xl font-bold text-gray-800 mb-6">Quick Settings</h3>
@@ -2047,7 +2200,8 @@ const StudentMarketplace = () => {
             { name: 'Notifications', desc: 'Manage notification preferences', icon: '🔔', color: 'from-blue-500 to-cyan-500', onClick: () => {} },
             { name: 'Privacy', desc: 'Control privacy settings', icon: '🔒', color: 'from-purple-500 to-pink-500', onClick: () => {} },
             { name: 'Payment Methods', desc: 'Configure UPI ID for payments', icon: '💳', color: 'from-green-500 to-emerald-500', onClick: () => setIsEditingProfile(true) },
-            { name: 'Help & Support', desc: 'Get help or contact us', icon: '💬', color: 'from-orange-500 to-red-500', onClick: () => {} }
+            ...(!userProfile.isAdmin ? [{ name: 'Help & Support', desc: 'Get help or contact us', icon: '💬', color: 'from-orange-500 to-red-500', onClick: () => setShowGrievanceModal(true) }] : []),
+            ...(userProfile.isAdmin ? [{ name: 'Admin Dashboard', desc: 'View all user grievances', icon: '🛡️', color: 'from-purple-600 to-indigo-600', onClick: () => setShowAdminGrievances(true) }] : [])
           ].map(item => (
             <button 
               key={item.name}
@@ -2361,6 +2515,21 @@ const StudentMarketplace = () => {
             setShowPaymentModal(false);
             setSelectedOrderForPayment(null);
           }}
+        />
+      )}
+
+      {/* Grievance Modal */}
+      <GrievanceModal
+        isOpen={showGrievanceModal}
+        onClose={() => setShowGrievanceModal(false)}
+        onGrievanceSubmitted={refetchUserGrievances}
+      />
+
+      {/* Admin Grievances Dashboard */}
+      {userProfile.isAdmin && (
+        <AdminGrievancesDashboard
+          isOpen={showAdminGrievances}
+          onClose={() => setShowAdminGrievances(false)}
         />
       )}
     </div>
