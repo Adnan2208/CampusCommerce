@@ -86,6 +86,9 @@ const StudentMarketplace = () => {
   // Grievance state
   const [showGrievanceModal, setShowGrievanceModal] = useState(false);
   const [showAdminGrievances, setShowAdminGrievances] = useState(false);
+  
+  // Admin products management state
+  const [showAdminProducts, setShowAdminProducts] = useState(false);
 
   // React Query for user grievances
   const { data: userGrievances = [], isLoading: loadingGrievances, isFetching: refreshingGrievances, refetch: refetchUserGrievances } = useQuery({
@@ -195,7 +198,7 @@ const StudentMarketplace = () => {
   }, [isAuthenticated, activePage]);
 
   // React Query for products
-  const { data: productsData, isLoading: productsLoading, error: productsError } = useQuery({
+  const { data: productsData, isLoading: productsLoading, error: productsError, refetch: refetchProducts } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
       const response = await productAPI.getAll();
@@ -204,8 +207,8 @@ const StudentMarketplace = () => {
       }
       return response.data;
     },
-    enabled: isAuthenticated && activePage === 'home',
-    refetchInterval: 10000, // Auto-refresh every 10 seconds
+    enabled: isAuthenticated && (activePage === 'home' || showAdminProducts),
+    refetchInterval: (activePage === 'home' || showAdminProducts) ? 10000 : false, // Auto-refresh every 10 seconds
     staleTime: 5000,
     retry: 1,
     onError: (err) => {
@@ -228,6 +231,24 @@ const StudentMarketplace = () => {
   useEffect(() => {
     setLoading(productsLoading);
   }, [productsLoading]);
+
+  // React Query for user's own products (including delisted ones)
+  const { data: userProductsData = [], isLoading: userProductsLoading, refetch: refetchUserProducts } = useQuery({
+    queryKey: ['userProducts'],
+    queryFn: async () => {
+      const response = await productAPI.getMyProducts();
+      if (!response.success) {
+        throw new Error('Failed to load your products');
+      }
+      return response.data;
+    },
+    enabled: isAuthenticated && activePage === 'profile',
+    staleTime: 5000,
+    retry: 1,
+    onError: (err) => {
+      console.error('Failed to fetch user products:', err);
+    }
+  });
 
   const fetchOrders = async () => {
     try {
@@ -307,7 +328,7 @@ const StudentMarketplace = () => {
         alert(`✅ Order ${status} successfully!`);
         fetchOrders(); // Refresh orders
         if (status === 'completed') {
-          fetchProducts(); // Refresh products to update sold status
+          refetchProducts(); // Refresh products to update sold status
         }
       }
     } catch (error) {
@@ -537,7 +558,8 @@ const StudentMarketplace = () => {
         setActivePage('home');
         
         // Refresh products from server
-        await fetchProducts();
+        await refetchProducts();
+        refetchUserProducts();
       } else {
         throw new Error(response.message || 'Failed to create product');
       }
@@ -574,7 +596,6 @@ const StudentMarketplace = () => {
       setProducts(prev => prev.filter(p => (p._id || p.id) !== productId));
       
       alert('✅ Product deleted successfully!');
-      await fetchProducts();
     } catch (error) {
       console.error('Error deleting product:', error);
       alert('❌ Failed to delete product. Please try again.');
@@ -582,6 +603,41 @@ const StudentMarketplace = () => {
       setLoading(false);
     }
   }, []);
+
+  // Admin delist product
+  const handleAdminDelistProduct = useCallback(async (productId, productTitle) => {
+    if (!window.confirm(`⚠️ Admin Action: Are you sure you want to delist "${productTitle}"?\n\nThis will hide the product from public listings but keep it in the seller's profile.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`http://localhost:5000/api/products/${productId}/admin-delist`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Remove from local state (public view)
+        setProducts(prev => prev.filter(p => (p._id || p.id) !== productId));
+        // Refetch all products to update the view
+        refetchProducts();
+        alert(`✅ ${data.message}`);
+      } else {
+        alert(`❌ ${data.message}`);
+      }
+    } catch (error) {
+      console.error('Error delisting product:', error);
+      alert('❌ Failed to delist product. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [refetchProducts]);
 
   // Start editing product
   const handleEditProduct = useCallback((product) => {
@@ -670,7 +726,8 @@ const StudentMarketplace = () => {
 
         alert('✅ Product updated successfully!');
         setActivePage('profile');
-        await fetchProducts();
+        await refetchProducts();
+        refetchUserProducts();
       }
     } catch (error) {
       console.error('Error updating product:', error);
@@ -888,13 +945,16 @@ const StudentMarketplace = () => {
     setProducts([]);
   };
 
-  // Get user's products
+  // Get user's products - use API data when on profile page, otherwise filter from all products
   const userProducts = useMemo(() => {
-    // Filter products that belong to the current user based on email
+    if (activePage === 'profile' && userProductsData.length > 0) {
+      return userProductsData;
+    }
+    // Fallback: Filter products that belong to the current user based on email
     return products.filter(p => 
       p.sellerEmail === userProfile.email
     );
-  }, [products, userProfile.email]);
+  }, [activePage, userProductsData, products, userProfile.email]);
 
   // Render Login Page
   const renderLoginPage = () => (
@@ -1363,13 +1423,30 @@ const StudentMarketplace = () => {
                   </div>
                 </div>
                 
-                {/* Quick View Button */}
-                <button 
-                  onClick={() => handleViewDetails(product)}
-                  className="w-full mt-4 bg-gradient-to-r from-blue-600/10 to-cyan-600/10 hover:from-blue-600 hover:to-cyan-600 text-blue-300 hover:text-white font-medium py-2.5 rounded-xl transition-all opacity-0 group-hover:opacity-100 border border-blue-500/30 hover:border-transparent"
-                >
-                  View Details
-                </button>
+                {/* Action Buttons */}
+                <div className="space-y-2 mt-4">
+                  <button 
+                    onClick={() => handleViewDetails(product)}
+                    className="w-full bg-gradient-to-r from-blue-600/10 to-cyan-600/10 hover:from-blue-600 hover:to-cyan-600 text-blue-300 hover:text-white font-medium py-2.5 rounded-xl transition-all opacity-0 group-hover:opacity-100 border border-blue-500/30 hover:border-transparent"
+                  >
+                    View Details
+                  </button>
+                  
+                  {/* Admin Delist Button */}
+                  {userProfile.isAdmin && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAdminDelistProduct(productId, product.title);
+                      }}
+                      className={`w-full bg-gradient-to-r from-red-600/10 to-red-600/10 hover:from-red-600 hover:to-red-700 text-red-400 hover:text-white font-medium py-2.5 rounded-xl transition-all border border-red-500/30 hover:border-transparent flex items-center justify-center gap-2 ${userProfile.isAdmin ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                      title="Admin: Delist this product"
+                    >
+                      <XCircle size={16} />
+                      Admin Delist
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
             );
@@ -1826,23 +1903,38 @@ const StudentMarketplace = () => {
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium">{product.category}</span>
                       <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">{product.condition}</span>
+                      {product.isDelisted && (
+                        <span className="bg-red-100 text-red-700 px-2 py-1 rounded-full font-medium">🚫 Delisted</span>
+                      )}
+                      {product.isSold && (
+                        <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full font-medium">✅ Sold</span>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => handleEditProduct(product)}
-                      className="text-blue-600 hover:bg-blue-100 p-3 rounded-xl transition-all"
-                      title="Edit"
-                    >
-                      <Edit2 size={20} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteProduct(productId)}
-                      className="text-red-600 hover:bg-red-100 p-3 rounded-xl transition-all"
-                      title="Delete"
-                    >
-                      <Trash2 size={20} />
-                    </button>
+                    {!product.isDelisted && (
+                      <>
+                        <button
+                          onClick={() => handleEditProduct(product)}
+                          className="text-blue-600 hover:bg-blue-100 p-3 rounded-xl transition-all"
+                          title="Edit"
+                        >
+                          <Edit2 size={20} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProduct(productId)}
+                          className="text-red-600 hover:bg-red-100 p-3 rounded-xl transition-all"
+                          title="Delete"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      </>
+                    )}
+                    {product.isDelisted && (
+                      <div className="text-red-600 px-3 py-2 text-sm font-medium">
+                        Cannot edit delisted product
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -2201,7 +2293,10 @@ const StudentMarketplace = () => {
             { name: 'Privacy', desc: 'Control privacy settings', icon: '🔒', color: 'from-purple-500 to-pink-500', onClick: () => {} },
             { name: 'Payment Methods', desc: 'Configure UPI ID for payments', icon: '💳', color: 'from-green-500 to-emerald-500', onClick: () => setIsEditingProfile(true) },
             ...(!userProfile.isAdmin ? [{ name: 'Help & Support', desc: 'Get help or contact us', icon: '💬', color: 'from-orange-500 to-red-500', onClick: () => setShowGrievanceModal(true) }] : []),
-            ...(userProfile.isAdmin ? [{ name: 'Admin Dashboard', desc: 'View all user grievances', icon: '🛡️', color: 'from-purple-600 to-indigo-600', onClick: () => setShowAdminGrievances(true) }] : [])
+            ...(userProfile.isAdmin ? [
+              { name: 'Admin Dashboard', desc: 'View all user grievances', icon: '🛡️', color: 'from-purple-600 to-indigo-600', onClick: () => setShowAdminGrievances(true) },
+              { name: 'Manage Products', desc: 'Delist any user product', icon: '🗑️', color: 'from-red-600 to-pink-600', onClick: () => setShowAdminProducts(true) }
+            ] : [])
           ].map(item => (
             <button 
               key={item.name}
@@ -2531,6 +2626,94 @@ const StudentMarketplace = () => {
           isOpen={showAdminGrievances}
           onClose={() => setShowAdminGrievances(false)}
         />
+      )}
+
+      {/* Admin Products Management Modal */}
+      {userProfile.isAdmin && showAdminProducts && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-slate-900 to-blue-900 rounded-3xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden border border-blue-500/30">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-red-600 to-pink-600 p-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                  🗑️ Admin: Manage All Products
+                </h2>
+                <p className="text-red-100 text-sm mt-1">
+                  Delist any product from the marketplace
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAdminProducts(false)}
+                className="text-white hover:bg-white/20 p-2 rounded-xl transition-all"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              {loading ? (
+                <div className="text-center py-16">
+                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400"></div>
+                  <p className="text-gray-400 mt-4">Loading products...</p>
+                </div>
+              ) : products.length === 0 ? (
+                <div className="text-center py-16">
+                  <Package size={64} className="mx-auto mb-4 text-gray-600" />
+                  <p className="text-gray-400 text-xl mb-2">No products in the marketplace</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {products.map(product => {
+                    const productId = product._id || product.id;
+                    return (
+                      <div key={productId} className="bg-slate-800/50 backdrop-blur-xl rounded-2xl overflow-hidden border border-blue-800/30 hover:border-red-500/50 transition-all">
+                        <div className="bg-gradient-to-br from-blue-100 to-cyan-100 h-40 flex items-center justify-center overflow-hidden">
+                          {renderProductImage(product.image)}
+                        </div>
+                        
+                        <div className="p-4">
+                          <h4 className="font-bold text-white mb-2 line-clamp-2 text-sm">{product.title}</h4>
+                          
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-lg font-bold text-cyan-400">₹{product.price}</span>
+                            {product.originalPrice && (
+                              <span className="text-xs text-gray-500 line-through">₹{product.originalPrice}</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 mb-3 text-xs">
+                            <span className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full">{product.category}</span>
+                            <span className="bg-green-500/20 text-green-300 px-2 py-1 rounded-full">{product.condition}</span>
+                          </div>
+
+                          <div className="text-xs text-gray-400 mb-3 space-y-1">
+                            <div className="flex items-center gap-1">
+                              <User size={12} />
+                              <span>Seller: {product.sellerName}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <MapPin size={12} />
+                              <span>{product.location}</span>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => handleAdminDelistProduct(productId, product.title)}
+                            className="w-full bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white font-medium py-2 rounded-xl transition-all flex items-center justify-center gap-2"
+                          >
+                            <XCircle size={16} />
+                            Delist Product
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

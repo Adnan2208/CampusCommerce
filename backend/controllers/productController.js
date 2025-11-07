@@ -4,7 +4,7 @@ import Product from '../models/Product.js';
 export const getAllProducts = async (req, res) => {
   try {
     const { category, search, condition, minPrice, maxPrice } = req.query;
-    let query = { isSold: false };
+    let query = { isSold: false, isDelisted: false };
 
     // Category filter
     if (category) {
@@ -201,6 +201,68 @@ export const markAsSold = async (req, res) => {
     }
 
     res.status(200).json({ success: true, data: product });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get user's own products (including delisted ones)
+export const getUserProducts = async (req, res) => {
+  try {
+    // Check if user is authenticated
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required to view your products'
+      });
+    }
+
+    // Find all products belonging to the user, including delisted ones
+    const products = await Product.find({ userId: req.user.userId }).sort({ createdAt: -1 });
+
+    res.status(200).json({ success: true, count: products.length, data: products });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Admin delist product
+export const adminDelistProduct = async (req, res) => {
+  try {
+    // Check if user is authenticated
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    // Import User model to check admin status
+    const User = (await import('../models/User.js')).default;
+    const user = await User.findById(req.user.userId);
+
+    if (!user || !user.isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required to delist products'
+      });
+    }
+
+    // Find and mark product as delisted instead of deleting
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    // Mark as delisted instead of deleting
+    product.isDelisted = true;
+    await product.save();
+
+    res.status(200).json({ 
+      success: true, 
+      message: `Product "${product.title}" has been delisted successfully` 
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

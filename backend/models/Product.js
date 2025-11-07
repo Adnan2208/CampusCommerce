@@ -73,6 +73,10 @@ const productSchema = new mongoose.Schema({
   isSold: {
     type: Boolean,
     default: false
+  },
+  isDelisted: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

@@ -109,6 +109,17 @@ export const productAPI = {
     }
   },
 
+  // Get user's own products (including delisted ones)
+  getMyProducts: async () => {
+    try {
+      const response = await api.get('/products/my-products');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching user products:', error);
+      throw error;
+    }
+  },
+
   // Upload image
   uploadImage: async (file) => {
     try {
