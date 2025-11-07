@@ -190,10 +190,18 @@ const StudentMarketplace = () => {
     }
   }, [isAuthenticated]);
 
-  // Fetch orders when navigating to profile page
+  // Fetch orders when navigating to profile page and poll for updates
   useEffect(() => {
     if (isAuthenticated && activePage === 'profile') {
       fetchOrders();
+      
+      // Poll for order updates every 5 seconds when on profile page
+      const intervalId = setInterval(() => {
+        fetchOrders();
+      }, 5000);
+      
+      // Cleanup interval when leaving profile page or unmounting
+      return () => clearInterval(intervalId);
     }
   }, [isAuthenticated, activePage]);
 
