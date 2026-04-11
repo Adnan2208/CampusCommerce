@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, User, Heart, Star, MapPin, MessageCircle, Plus, Home, Package, Edit2, Trash2, Store, X, ShoppingBag, Clock, CheckCircle, XCircle, CreditCard } from 'lucide-react';
-import { productAPI, orderAPI } from './services/api';
+import { productAPI, orderAPI, API_URL, API_BASE_URL } from './services/api';
 import LocationTracker from './Components/LocationTracker';
 import PaymentModal from './components/PaymentModal';
 import GrievanceModal from './components/GrievanceModal';
@@ -95,7 +95,7 @@ const StudentMarketplace = () => {
     queryKey: ['userGrievances'],
     queryFn: async () => {
       const token = localStorage.getItem('authToken');
-      const response = await fetch('http://localhost:5000/api/grievances/my-grievances', {
+      const response = await fetch(`${API_URL}/grievances/my-grievances`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -319,7 +319,7 @@ const StudentMarketplace = () => {
           const order = receivedOrders.find(o => o._id === orderId);
           if (order && order.pickupCoordinates) {
             try {
-              await fetch(`http://localhost:5000/api/orders/${orderId}/enable-tracking`, {
+              await fetch(`${API_URL}/orders/${orderId}/enable-tracking`, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${authToken}`,
@@ -427,7 +427,7 @@ const StudentMarketplace = () => {
   const renderProductImage = useCallback((imageUrl, size = 'large') => {
     // Check if it's a URL (uploaded image) - including data URLs from base64
     if (imageUrl && (imageUrl.startsWith('/uploads/') || imageUrl.startsWith('http') || imageUrl.startsWith('data:image'))) {
-      const fullUrl = imageUrl.startsWith('/uploads/') ? `http://localhost:5000${imageUrl}` : imageUrl;
+      const fullUrl = imageUrl.startsWith('/uploads/') ? `${API_BASE_URL}${imageUrl}` : imageUrl;
       return (
         <img 
           src={fullUrl} 
@@ -621,7 +621,7 @@ const StudentMarketplace = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`http://localhost:5000/api/products/${productId}/admin-delist`, {
+      const response = await fetch(`${API_URL}/products/${productId}/admin-delist`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -664,7 +664,7 @@ const StudentMarketplace = () => {
     });
     // Set preview for uploaded images or base64
     if (product.image && (product.image.startsWith('/uploads/') || product.image.startsWith('data:') || product.image.startsWith('http'))) {
-      const fullUrl = product.image.startsWith('/uploads/') ? `http://localhost:5000${product.image}` : product.image;
+      const fullUrl = product.image.startsWith('/uploads/') ? `${API_BASE_URL}${product.image}` : product.image;
       setImagePreview(fullUrl);
     } else {
       setImagePreview(null);
@@ -801,7 +801,7 @@ const StudentMarketplace = () => {
     try {
       setLoading(true);
       
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -867,7 +867,7 @@ const StudentMarketplace = () => {
     try {
       setLoading(true);
       
-      const response = await fetch('http://localhost:5000/api/auth/signup', {
+      const response = await fetch(`${API_URL}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -912,7 +912,7 @@ const StudentMarketplace = () => {
     try {
       setLoading(true);
       
-      const response = await fetch('http://localhost:5000/api/auth/verify-code', {
+      const response = await fetch(`${API_URL}/auth/verify-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1506,7 +1506,7 @@ const StudentMarketplace = () => {
         <form onSubmit={editingProduct ? handleUpdateProduct : handlePublishListing} className="space-y-6">
           {/* Premium Image Upload */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-3 items-center gap-2">
               Product Photos
               <span className="text-xs font-normal text-gray-500">(Required)</span>
             </label>

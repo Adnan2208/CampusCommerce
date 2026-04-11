@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Package, ShoppingBag, Store, Edit2, Check, X, User as UserIcon } from 'lucide-react';
 import OrderCard from '../orders/OrderCard';
-import { orderAPI } from '../../services/api';
+import { orderAPI, API_URL } from '../../services/api';
 
 const ProfilePage = ({ userProfile, onUpdateProfile, onLogout }) => {
   const [activeTab, setActiveTab] = useState('listings');
@@ -53,7 +53,7 @@ const ProfilePage = ({ userProfile, onUpdateProfile, onLogout }) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch('http://localhost:5000/api/auth/profile', {
+      const response = await fetch(`${API_URL}/auth/profile`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

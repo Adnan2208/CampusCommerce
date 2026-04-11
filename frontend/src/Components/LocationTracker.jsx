@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 import { Navigation, MapPin, User, Package } from 'lucide-react';
+import { API_URL } from '../services/api';
 
 const LocationTracker = ({ 
   orderId, 
@@ -48,7 +49,7 @@ const LocationTracker = ({
   // Fetch tracking data
   const fetchTrackingData = useCallback(async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/orders/${orderId}/tracking`, {
+      const response = await fetch(`${API_URL}/orders/${orderId}/tracking`, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
@@ -76,7 +77,7 @@ const LocationTracker = ({
   // Update user's location to server
   const updateLocationToServer = useCallback(async (lat, lng) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/orders/${orderId}/update-location`, {
+      const response = await fetch(`${API_URL}/orders/${orderId}/update-location`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${authToken}`,

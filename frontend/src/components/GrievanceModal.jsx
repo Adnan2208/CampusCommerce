@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, AlertCircle, CheckCircle } from 'lucide-react';
+import { API_URL } from '../services/api';
 
 const GrievanceModal = ({ isOpen, onClose, onGrievanceSubmitted }) => {
   const [formData, setFormData] = useState({
@@ -43,7 +44,7 @@ const GrievanceModal = ({ isOpen, onClose, onGrievanceSubmitted }) => {
         return;
       }
 
-      const response = await fetch('http://localhost:5000/api/grievances/submit', {
+      const response = await fetch(`${API_URL}/grievances/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

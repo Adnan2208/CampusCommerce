@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X, AlertCircle, User, Mail, Calendar, Filter, RefreshCw } from 'lucide-react';
+import { API_URL } from '../services/api';
 
 const AdminGrievancesDashboard = ({ isOpen, onClose }) => {
   const [filterStatus, setFilterStatus] = useState('All');
@@ -12,7 +13,7 @@ const AdminGrievancesDashboard = ({ isOpen, onClose }) => {
     queryKey: ['adminGrievances'],
     queryFn: async () => {
       const token = localStorage.getItem('authToken');
-      const response = await fetch('http://localhost:5000/api/grievances/all', {
+      const response = await fetch(`${API_URL}/grievances/all`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -33,7 +34,7 @@ const AdminGrievancesDashboard = ({ isOpen, onClose }) => {
   const handleUpdateStatus = async (grievanceId, status) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`http://localhost:5000/api/grievances/${grievanceId}`, {
+      const response = await fetch(`${API_URL}/grievances/${grievanceId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -59,7 +60,7 @@ const AdminGrievancesDashboard = ({ isOpen, onClose }) => {
   const handleAddNotes = async (grievanceId, adminNotes) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`http://localhost:5000/api/grievances/${grievanceId}`, {
+      const response = await fetch(`${API_URL}/grievances/${grievanceId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

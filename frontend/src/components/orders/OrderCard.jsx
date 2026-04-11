@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CreditCard, CheckCircle, Clock, AlertCircle, Image as ImageIcon, X } from 'lucide-react';
 import PaymentModal from '../PaymentModal';
-import { paymentAPI } from '../../services/api';
+import { paymentAPI, API_BASE_URL } from '../../services/api';
 
 /**
  * OrderCard Component - Shows order details with payment integration
@@ -288,7 +288,7 @@ const OrderCard = ({ order, onOrderUpdate, userRole = 'buyer' }) => {
                 <div className="bg-slate-700/50 rounded-xl p-4 border border-slate-600">
                   <h3 className="text-white font-semibold mb-3">Payment Screenshot</h3>
                   <img
-                    src={`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'}${order.payment.paymentScreenshot}`}
+                    src={`${API_BASE_URL}${order.payment.paymentScreenshot}`}
                     alt="Payment screenshot"
                     className="w-full rounded-lg border border-slate-600"
                   />
