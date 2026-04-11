@@ -290,6 +290,9 @@ kill -9 <PID>
 - ✅ Check network connection for location updates
 
 **Email Verification Not Sending:**
+- ✅ On Render, prefer Resend API (HTTPS) to avoid SMTP connectivity limits:
+   - `RESEND_API_KEY=...`
+   - `EMAIL_FROM=Campus Commerce <onboarding@resend.dev>` (or your verified domain sender)
 - ✅ Configure `EMAIL_USER` and `EMAIL_PASS` in backend `.env`
 - ✅ Use Gmail App Password (not regular password)
 - ✅ For Render/production, set SMTP variables explicitly:
