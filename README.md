@@ -292,7 +292,12 @@ kill -9 <PID>
 **Email Verification Not Sending:**
 - ✅ Configure `EMAIL_USER` and `EMAIL_PASS` in backend `.env`
 - ✅ Use Gmail App Password (not regular password)
-- ✅ Enable "Less secure app access" or use OAuth2
+- ✅ For Render/production, set SMTP variables explicitly:
+   - `SMTP_HOST=smtp.gmail.com`
+   - `SMTP_PORT=587`
+   - `SMTP_SECURE=false`
+   - `SMTP_REQUIRE_TLS=true`
+- ✅ Ensure outbound SMTP port `587` is allowed by your provider/network
 
 ## 📂 Directory Structure
 

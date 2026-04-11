@@ -12,8 +12,28 @@ const createTransporter = () => {
     return null;
   }
 
+  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const smtpPort = Number(process.env.SMTP_PORT || 587);
+  const smtpSecure = process.env.SMTP_SECURE
+    ? process.env.SMTP_SECURE === 'true'
+    : smtpPort === 465;
+  const smtpRequireTLS = process.env.SMTP_REQUIRE_TLS
+    ? process.env.SMTP_REQUIRE_TLS === 'true'
+    : smtpPort === 587;
+
   return nodemailer.createTransport({
-    service: 'gmail', // You can change this to other services like 'outlook', 'yahoo', etc.
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
+    requireTLS: smtpRequireTLS,
+    connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT || 15000),
+    greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT || 10000),
+    socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT || 20000),
+    tls: {
+      // Helps some cloud environments complete TLS handshake reliably.
+      servername: smtpHost,
+      minVersion: 'TLSv1.2'
+    },
     auth: {
       user: emailUser,
       pass: emailPass // For Gmail, use an App Password, not your regular password
@@ -153,6 +173,13 @@ export const sendVerificationEmail = async (email, code) => {
     return { success: true };
   } catch (error) {
     console.error('❌ Error sending verification email:', error);
+    console.error('❌ SMTP details:', {
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: process.env.SMTP_SECURE ?? '(auto)',
+      code: error.code,
+      command: error.command
+    });
     throw new Error('Failed to send verification email');
   }
 };
