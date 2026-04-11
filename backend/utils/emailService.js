@@ -105,33 +105,46 @@ const buildVerificationEmailHtml = (code) => `
   </html>
 `;
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,        // STARTTLS — do NOT use true for port 587
-  requireTLS: true,     // enforce TLS upgrade
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, // 16-char Gmail App Password (no spaces)
-  },
-  tls: {
-    servername: 'smtp.gmail.com',
-    minVersion: 'TLSv1.2',
-  },
-});
+let transporter = null;
+
+const getTransporter = () => {
+  if (transporter) return transporter;
+  
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    return null;
+  }
+  
+  transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    requireTLS: true,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+    tls: {
+      servername: 'smtp.gmail.com',
+      minVersion: 'TLSv1.2',
+    },
+  });
+  
+  return transporter;
+};
 
 export const generateVerificationCode = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
 export const sendVerificationEmail = async (email, code) => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    // Dev fallback: just log the code
+  const mailTransporter = getTransporter();
+  
+  if (!mailTransporter) {
     console.log(`📧 [DEV MODE] Verification code for ${email}: ${code}`);
     return { success: true, devMode: true };
   }
 
-  await transporter.sendMail({
+  await mailTransporter.sendMail({
     from: `"Campus Commerce" <${process.env.EMAIL_USER}>`,
     to: email,
     subject: 'Campus Commerce - Email Verification',
