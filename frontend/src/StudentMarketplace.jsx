@@ -886,7 +886,7 @@ const StudentMarketplace = () => {
         setShowVerificationStep(true);
         
         if (data.testMode) {
-          alert(`✅ Verification code sent!\n\nTest Mode: Your code is ${data.code}\n\nNote: Configure EMAIL_USER and EMAIL_PASS in backend/.env for real emails`);
+          alert(`✅ Verification code sent!\n\nTest Mode: Your code is ${data.code}\n\nNote: Due to free tier restrictions, real mails are disabled in production`);
         } else {
           alert('✅ Verification code sent to your email! Please check your inbox.');
         }

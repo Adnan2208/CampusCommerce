@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import VerificationCode from '../models/VerificationCode.js';
-import { generateVerificationCode, sendVerificationEmail } from '../utils/emailService.js';
+// import { generateVerificationCode, sendVerificationEmail } from '../utils/emailService.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -23,7 +23,7 @@ router.post('/signup', async (req, res) => {
     }
 
     // Generate verification code
-    const code = generateVerificationCode();
+    // const code = generateVerificationCode();
 
     // Delete any existing verification codes for this email
     await VerificationCode.deleteMany({ email });
@@ -31,7 +31,7 @@ router.post('/signup', async (req, res) => {
     // Store verification code and user data temporarily (password will be hashed when user is created)
     await VerificationCode.create({
       email,
-      code,
+      code: '123456', // Hardcoded for testing
       userData: {
         name,
         password, // Store plain password temporarily - will be hashed on user creation
@@ -41,19 +41,22 @@ router.post('/signup', async (req, res) => {
     });
 
     // Send verification email
-    const emailResult = await sendVerificationEmail(email, code);
+    // const emailResult = await sendVerificationEmail(email, code);
 
+    // Return code directly for testing (since email is commented out)
+    const code = '123456';
+    
     res.status(200).json({
       success: true,
-      message: 'Verification code sent to your email!',
-      testMode: emailResult.testMode,
-      ...(emailResult.testMode && { code }) // Include code in response if in test mode
+      message: 'Account created directly (email verification disabled for testing)!',
+      testMode: true,
+      code
     });
   } catch (error) {
     console.error('Signup error:', error);
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to send verification code'
+      message: error.message || 'Failed to create account'
     });
   }
 });
